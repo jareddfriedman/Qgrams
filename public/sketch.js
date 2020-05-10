@@ -984,10 +984,11 @@ function mouseDragged() {
   if (turnState == 2 && actState && grabbed) {
     sendMouse(mouseX, floor(mouseY));
   }
+  return false;
 }
 
 function sendMouse(xpos, ypos) {
-  console.log("sendmouse: " + xpos + " " + ypos);
+  //console.log("sendmouse: " + xpos + " " + ypos);
   var data = {
     x: xpos,
     y: ypos
@@ -1058,7 +1059,7 @@ if (key == " " && turnState == 2 && actState) {
 }
 
 
-
+return false;
 }
 
 
@@ -1069,4 +1070,5 @@ function mouseReleased(){
   console.log("mouse is released at " + mousePos.x);
   socket.emit('dropLetter', mousePos);
   }
+  return false;
 }
