@@ -89,7 +89,7 @@ io.sockets.on('connection',
     socket.on('mouse',
       function(data) {
         // Data comes in as whatever was sent, including objects
-        console.log("Received: 'mouse' " + data.x + " " + data.y + "from " + socket.id);
+        //console.log("Received: 'mouse' " + data.x + " " + data.y + "from " + socket.id);
         dragX = data.x;
         dragY = data.y;
         manageTiles();
@@ -535,7 +535,7 @@ function manageTiles() {
       xpos: dragX,
       ypos: dragY
       }
-      console.log("x is now " + udPkg.xpos);
+      // console.log("x is now " + udPkg.xpos);
     io.emit('updateTile', udPkg);
 }
 
