@@ -63,7 +63,9 @@ var notEnuff = false;
 function setup() {
   createCanvas(1366, 750);
 
-  socket = io.connect('http://localhost:3000');
+  socket = io.connect('http://167.172.149.111:3000');
+
+  // socket = io.connect('http://localhost:3000');
   socket.on('mouse',
 
     function(data) {
