@@ -69,6 +69,19 @@ var passes = 0;
 
 var enuff = 0;
 
+var newTile = true;
+
+var inProgress = false;
+
+var lostPlayer = false;
+
+var sampleStuff = {
+  coms: [["a", 1], ["e", 1], ["t", 1], ["m", 3]],
+  p1s: [["dog", 5], ["vine", 7], ["cma", 7]],
+  p2s: [["bprz", 17], ["golf", 8], ["flute", 8]],
+  blocks: []
+}
+
 function listen() {
   var host = server.address().address;
   var port = server.address().port;
@@ -84,6 +97,10 @@ io.sockets.on('connection',
   function (socket) {
 
     console.log("We have a new client: " + socket.id);
+
+    if(inProgress && lostPlayer) {
+      socket.emit('areYouLost', "x");
+    }
 
     // When this user emits, client side: socket.emit('otherevent',some data);
     socket.on('mouse',
@@ -132,14 +149,15 @@ io.sockets.on('connection',
       console.log("Hi there!");
       users.push(socket.id);
       console.log("We are now serving " + users.length + " clients.")
-      if (users.length == 1) {
+      if (users.length == 1 && !inProgress) {
         p1 = socket.id;
       socket.emit('hiBack', 1);
-    } else if (users.length == 2) {
+    } else if (users.length == 2 && !inProgress) {
         p2 = socket.id;
       socket.emit('hiBack', 2);
       socket.emit('readyp2', "x");
       socket.broadcast.emit('readyp1', "x");
+      inProgress = true;
       getStarted();
     } else {
       socket.emit('hiBack', 3);
@@ -182,7 +200,7 @@ io.sockets.on('connection',
         p2words[i].y = p2words[i].snapy;
       }
     }
-
+    enuff = 0;
     blockTiles = [];
 
     placeWordTiles();
@@ -217,7 +235,9 @@ io.sockets.on('connection',
     socket.on('drawTile',
     function() {
       if(specTiles.length>0) {
+        io.emit('newTrans', "x");
         var tT = specTiles[0];
+        //specTiles[0].disp = false;
         comTiles.unshift(tT);
         buildTiles();
         specTiles.shift();
@@ -226,6 +246,11 @@ io.sockets.on('connection',
         io.emit('noMoreTiles', "x");
       }
     });
+
+    // socket.on('yesTrans',
+    // function() {
+    //   buildTiles();
+    // });
 
     socket.on('imDone',
     function() {
@@ -247,9 +272,9 @@ io.sockets.on('connection',
     });
 
     socket.on('sendWord', // next steps: write code for challenging, for abandoning word
-    function(data) {
+    function() {
       if(enuff >= 2) {
-      makeWord(data);
+      arrangeWord();
     } else {
       socket.emit('notEnuff', "x");
     }
@@ -334,6 +359,37 @@ io.sockets.on('connection',
         }
     });
 
+    socket.on('imBack',
+    function() {
+      users.push(socket.id);
+      if (p1 == 0) {
+        p1 = socket.id;
+      }
+      if (p2 == 0) {
+        p2 = socket.id;
+      }
+      lostPlayer = false;
+      socket.broadcast.emit('tellMeStuff', "x");
+    });
+
+    socket.on('hereStuff',
+    function(data) {
+      var pId = 0;
+      if (p1 == socket.id) {pId = 2;} else if (p2 == socket.id) {pId = 1;}
+      var aS = !data.aS;
+      var wbPkg = {
+        coms: comTiles,
+        blocks: blockTiles,
+        p1s: p1words,
+        p2s: p2words,
+        gS: data.gS,
+        tS: data.tS,
+        aS: aS,
+        pId: pId
+      }
+      socket.broadcast.emit('stuffForYou', wbPkg);
+    });
+
 
     socket.on('dropLetter',
     function(data) {
@@ -360,6 +416,7 @@ io.sockets.on('connection',
           blockTiles[tElt].y = blockTiles[tElt].snapy;
           placeBlockTiles();
         } else {
+          enuff--;
           for (var i = 0; i < comTiles.length; i++) {
             if (comTiles[i].id == blockTiles[tElt].id) {
               console.log("making visible: " + comTiles[i].letter);
@@ -380,6 +437,19 @@ io.sockets.on('connection',
     });
 
     socket.on('disconnect', function() {
+      var tU;
+      for (var i = 0; i < users.length; i++) {
+        if(users[i] = socket.id) {
+          users.splice(i, 1);
+        }
+      }
+      if (p1 == socket.id) {
+        p1 = 0;
+      }
+      if (p2 == socket.id) {
+        p2 = 0;
+      }
+      lostPlayer = true;
       console.log("Client has disconnected");
     });
   }
@@ -395,10 +465,28 @@ function penaltySeq(playNum) {
   io.emit('penSeq', playNum);
 }
 
+function arrangeWord() {
+  var blockWord;
+  var blockLetters = [];
+  var blockVal = 0;
+  for (var i = 0; i < blockTiles.length; i++) {
+    blockLetters.push(blockTiles[i].letter);
+    blockVal += blockTiles[i].points;
+  }
+
+  blockWord = blockLetters.join('');
+
+  blockPkg = {word: blockWord, valu: blockVal};
+
+  makeWord(blockPkg);
+}
+
 function moveToBlock(data) {
   if(activeElement.type == 2 || activeElement.type == 3) {
+    enuff++;
     wordToBlock(activeElement.type, activeElement.element, data);
   } else if (activeElement.type == 1) {
+    enuff++;
     tileToBlock(activeElement.element, data);
   } else if (activeElement.type == 4) {
     moveBlockTile(data);
@@ -625,18 +713,18 @@ function placeBlockTiles() {
     console.log("tile " + i + " is " + blockTiles[i].letter + " at " + blockTiles[i].x);
   }
   grabbed = false;
-  enuff++;
   activeElement = {};
   sendLists();
 }
 
 function sendLists() {
-  console.log("sending lists");
+  console.log("sending lists. enuff: " + enuff);
   var listPkg = {
     coms: comTiles,
     blocks: blockTiles,
     p1s: p1words,
-    p2s: p2words
+    p2s: p2words,
+    enuff: enuff
   }
   io.emit('revLists', listPkg);
 }
@@ -655,6 +743,7 @@ function buildTiles() {
   comTiles[0].ymax = comTiles[0].y + 40;
   comTiles[0].snapx = comTiles[0].x;
   comTiles[0].snapy = comTiles[0].y;
+
   if (comTiles.length > 1) {
   for (var i = 1; i < comTiles.length; i++) {
     var ns = Math.floor((i-1)/2);
