@@ -445,11 +445,12 @@ io.sockets.on('connection',
       }
       if (p1 == socket.id) {
         p1 = 0;
+        lostPlayer = true;
       }
       if (p2 == socket.id) {
         p2 = 0;
+        lostPlayer = true;
       }
-      lostPlayer = true;
       console.log("Client has disconnected");
     });
   }
