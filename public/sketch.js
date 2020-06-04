@@ -1252,7 +1252,7 @@ function challengeAnim() {
 
   } else {
     push();
-    translate(0, -32);
+    translate(0, 0);
     textSize(36);
     text("That word has already been challenged.\nChoose a different word or press C to exit", 0, 0);
     pop();
