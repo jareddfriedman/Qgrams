@@ -1319,7 +1319,7 @@ GameRoom.prototype.buildTiles = function() {
         if (data.x > this.blockTiles[i-1].x && data.x < this.blockTiles[i].x) {
           // console.log ('splitting tiles');
           var arr1 = this.blockTiles.slice(0, i);
-          var arr2 = this.blockTiles.slice(i, blockTiles.length);
+          var arr2 = this.blockTiles.slice(i, this.blockTiles.length);
           newBT = arr1.concat(pushingTiles, arr2);
         } //this is where i am... it almost works
           }
