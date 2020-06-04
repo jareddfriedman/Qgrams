@@ -5,6 +5,8 @@ var server = app.listen(3000, listen);
 
 var users = [];
 
+var userGuide = {};
+
 var valCat = {"a": 1, "b": 3, "c": 3, "d": 2, "e": 1, "f": 4, "g": 2,
               "h": 4, "i": 1, "j": 8, "k": 5, "l": 1, "m": 3, "n": 1,
               "o": 1, "p": 3, "q": 10, "r": 1, "s": 1, "t": 1, "u": 1,
@@ -37,24 +39,10 @@ var rawWordObject = fs.readFileSync('bigList.json');
 
 var bigDict = JSON.parse(rawWordObject);
 
-var specTiles = [];
-
-var comTiles = [];
-
-var activeTiles = [];
-
 var allReady = 0;
 
 var p1;
 var p2;
-
-var p1words = [];
-var p2words = [];
-
-var p1tiles = [];
-var p2tiles = [];
-
-var blockTiles = [];
 
 var pNum = 1;
 
@@ -75,12 +63,19 @@ var inProgress = false;
 
 var lostPlayer = false;
 
-var sampleStuff = {
-  coms: [["a", 1], ["e", 1], ["t", 1], ["m", 3]],
-  p1s: [["dog", 5], ["vine", 7], ["cma", 7]],
-  p2s: [["bprz", 17], ["golf", 8], ["flute", 8]],
-  blocks: []
-}
+//var masterList = keyList(bigDict);
+
+var gameRooms = [];
+
+var waiters = [];
+
+var brokenGames = [];
+
+// function keyList(listObj) {
+//   return Object.keys(listObj);
+// }
+//
+// console.log(masterList.length);
 
 function listen() {
   var host = server.address().address;
@@ -96,20 +91,38 @@ io.sockets.on('connection',
   // We are given a websocket object in our function
   function (socket) {
 
+    socket.emit('yourID', socket.id);
+
     console.log("We have a new client: " + socket.id);
 
     if(inProgress && lostPlayer) {
       socket.emit('areYouLost', "x");
     }
 
+    socket.on('signup',
+    function(data) {
+      console.log(data);
+      socket.emit('signedIn', "x");
+    }
+  );
     // When this user emits, client side: socket.emit('otherevent',some data);
     socket.on('mouse',
       function(data) {
+
+        var tRX = userGuide[socket.id];
+        var tR;
+        for (var i = 0; i < gameRooms.length; i++) {
+          if (gameRooms[i].roomName == tRX) {
+            tR = gameRooms[i];
+            break;
+          }
+        }
+
         // Data comes in as whatever was sent, including objects
         //console.log("Received: 'mouse' " + data.x + " " + data.y + "from " + socket.id);
-        dragX = data.x;
-        dragY = data.y;
-        manageTiles();
+        tR.dragX = data.x;
+        tR.dragY = data.y;
+        tR.manageTiles();
         // Send it to all other clients
         //socket.broadcast.emit('mouse', data);
 
@@ -119,18 +132,135 @@ io.sockets.on('connection',
       }
     );
 
+    socket.on('matchMe',
+    function(data) {
+      console.log("hearing from " + data);
+      if(gameRooms.length === 0) {
+        var newName = nameGen();
+        gameRooms.push(new GameRoom(newName, socket.id.toString(), data));
+        getStarted(gameRooms[0]);
+        socket.join(gameRooms[0].roomName);
+        socket.emit('waitHere', "x");
+        console.log("created room " + gameRooms[0].roomName + " for " + gameRooms[0].p1 + " aka " + gameRooms[0].p1friendly);
+      } else {
+        var needNew = true;
+        for (var i = 0; i < gameRooms.length; i++) {
+          if (gameRooms[i].open) {
+            socket.join(gameRooms[i].roomName);
+            gameRooms[i].p2 = socket.id.toString();
+            gameRooms[i].p2friendly = data;
+            gameRooms[i].open = false;
+            gameRooms[i].occupants = 2;
+            needNew = false;
+            console.log(data + " joined " + gameRooms[i].p1friendly + " to play Quarantinagrams!");
+            kickOffGame(gameRooms[i]);
+          }
+        }
+        if(needNew) {
+          console.log("making new room");
+          var newName = nameGen();
+          gameRooms.push (new GameRoom(newName, socket.id.toString(), data));
+          var ind = gameRooms.length - 1;
+          getStarted(gameRooms[ind]);
+          socket.join(gameRooms[ind].roomName);
+          socket.emit('waitHere', "x");
+        }
+      }
+    }
+  );
+
+  socket.on('findMe',
+  function(data) {
+    socket.join('waitingRoom');
+    var waiter = {
+      name: socket.id.toString(),
+      friendly: data
+    }
+    waiters.push(waiter);
+    io.in('waitingRoom').emit('weWait', waiters);
+  }
+);
+
+socket.on('connectMe',
+function(data) {
+  var tUser;
+  for (var i = 0; i < waiters.length; i++) {
+    if (socket.id == waiters[i].name) {
+      tUser = waiters[i];
+      waiters[i].waiting = data;
+    }
+  }
+  io.to(data).emit('thisGuy', tUser);
+}
+);
+
+socket.on('goodToGo',
+function(data) {
+    var tName = nameGen();
+    socket.join(tName);//now you gotta break this into 2 functions to have each join the room
+    socket.leave('waitingRoom');
+    gameRooms.push(new GameRoom(tName, data.p1id, data.p1friendly));
+    var gRL = gameRooms.length - 1;
+    gameRooms[gRL].p2 = data.p2id;
+    gameRooms[gRL].p2friendly = data.p2friendly;
+    gameRooms[gRL].open = false;
+    for (var i = 0; i < waiters.length; i++) {
+      if (waiters[i].name == gameRooms[gRL].p1 || waiters[i].name == gameRooms[gRL].p2) {
+        waiters.splice(i, 1);
+        io.in('waitingRoom').emit('weWait', waiters);
+      }
+    }
+    getStarted(gameRooms[gRL]);
+    io.to(gameRooms[gRL].p1).emit('joinMe', gameRooms[gRL]);
+  }
+);
+
+socket.on('joined',
+function(data) {
+  socket.join(data.roomName);
+  for (var i = 0; i < waiters.length; i++) {
+    if (waiters[i].name == socket.id|| waiters[i].name == socket.id) {
+      waiters.splice(i, 1);
+      io.in('waitingRoom').emit('weWait', waiters);
+    }
+  }
+  socket.leave('waitingRoom');
+    kickOffGame(data);
+    //io.to(gameRooms[gRL].roomName).emit('afoot', gameRooms[gRL]);
+  }
+);
+
+socket.on('notQuite',
+function(data) {
+    io.to(data.name).emit('missedCon', "x");
+  }
+);
+
+
+socket.on('hiAgain',
+function(data) {
+    if(brokenGames.length < 1) {
+      socket.emit('noReturn', "x");
+    } else {
+      var tempBG = [];
+      for (var i = 0; i < brokenGames.length; i++) {
+        if (brokenGames[i].p1friendly.toUpperCase() == data.toUpperCase() || brokenGames[i].p2friendly.toUpperCase() == data.toUpperCase()) {
+          tempBG.push(brokenGames[i]);
+        }
+      }
+      if (tempBG.length < 1) {
+        socket.emit('nobodyName', "x");
+      } else {
+        console.log("you're good")
+        socket.emit('hereBroken', tempBG);
+      }
+    }
+  });
+
     socket.on('noChallenge',
     function(data) {
       console.log("turn it back");
       io.emit('turnBack', "x");
-    }
-  );
-
-    socket.on('word',
-    function(data) {
-      var stringed = data.join('');
-      console.log("i got: " + stringed);
-      socket.broadcast.emit('word', data);
     }
   );
 
@@ -168,49 +298,67 @@ io.sockets.on('connection',
 
   socket.on('makingWord', // tells active player and passive player their respective roles
   function() {
-    if(socket.id == p1) {pNum = 1;} else {pNum = 2;}
-    activeTiles = comTiles.concat(p1tiles, p2tiles);
+
+    var tRX = userGuide[socket.id];
+    var tR;
+    for (var i = 0; i < gameRooms.length; i++) {
+      if (gameRooms[i].roomName == tRX) {
+        tR = gameRooms[i];
+        break;
+      }
+    }
+
+    if(socket.id == tR.p1) {
+      io.to(tR.p1).emit('youreOn', "x");
+      io.to(tR.p2).emit('youreOff', "x");
+      tR.pNum = 1;
+    } else {
+      io.to(tR.p1).emit('youreOff', "x");
+      io.to(tR.p2).emit('youreOn', "x");
+      tR.pNum = 2;
+    }
     console.log ("Player " + pNum + " is making a word.");
-    socket.emit('youreOn', "x");
-    socket.broadcast.emit('youreOff', "x");
   });
 
   socket.on('putEmBack', // tells active player and passive player their respective roles
   function() {
-    if(comTiles.length > 0){
-      for (var i = 0; i<comTiles.length; i++) {
-        comTiles[i].disp = true;
-        comTiles[i].x = comTiles[i].snapx;
-        comTiles[i].y = comTiles[i].snapy;
+    var tRX = userGuide[socket.id];
+    var tR;
+    for (var i = 0; i < gameRooms.length; i++) {
+      if (gameRooms[i].roomName == tRX) {
+        tR = gameRooms[i];
+        break;
       }
     }
 
-    if(p1words.length > 0){
-      for (var i = 0; i<p1words.length; i++) {
-        p1words[i].disp = true;
-        p1words[i].x = p1words[i].snapx;
-        p1words[i].y = p1words[i].snapy;
+
+    if(tR.comTiles.length > 0){
+      for (var i = 0; i<tR.comTiles.length; i++) {
+        tR.comTiles[i].disp = true;
+        tR.comTiles[i].x = tR.comTiles[i].snapx;
+        tR.comTiles[i].y = tR.comTiles[i].snapy;
       }
     }
 
-    if(p2words.length > 0){
-      for (var i = 0; i<p2words.length; i++) {
-        p2words[i].disp = true;
-        p2words[i].x = p2words[i].snapx;
-        p2words[i].y = p2words[i].snapy;
+    if(tR.p1words.length > 0){
+      for (var i = 0; i<tR.p1words.length; i++) {
+        tR.p1words[i].disp = true;
+        tR.p1words[i].x = tR.p1words[i].snapx;
+        tR.p1words[i].y = tR.p1words[i].snapy;
       }
     }
-    enuff = 0;
-    blockTiles = [];
 
-    placeWordTiles();
+    if(tR.p2words.length > 0){
+      for (var i = 0; i<tR.p2words.length; i++) {
+        tR.p2words[i].disp = true;
+        tR.p2words[i].x = tR.p2words[i].snapx;
+        tR.p2words[i].y = tR.p2words[i].snapy;
+      }
+    }
+    tR.enuff = 0;
+    tR.blockTiles = [];
 
-    // var eTpkg = {
-    //   coms: comTiles,
-    //   blocks: blockTiles,
-    // }
-    //
-    // io.emit('endTurn', eTpkg);
+    tR.placeWordTiles();
 
   });
 
@@ -234,66 +382,144 @@ io.sockets.on('connection',
 
     socket.on('drawTile',
     function() {
-      if(specTiles.length>0) {
-        io.emit('newTrans', "x");
-        var tT = specTiles[0];
+
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
+
+      if(tR.specTiles.length>0) {
+        console.log("got spectiles");
+        io.in(tRX).emit('newTrans', "x");
+        var tT = tR.specTiles[0];
         //specTiles[0].disp = false;
-        comTiles.unshift(tT);
-        buildTiles();
-        specTiles.shift();
+        tR.comTiles.unshift(tT);
+        tR.buildTiles();
+        //tR = buildTiles(tR);
+        tR.specTiles.shift();
         console.log("sending a tile: " + tT.letter);
+        //io.in(tR.roomName).emit('hereTile', tR.comTiles)
       } else {
-        io.emit('noMoreTiles', "x");
+        io.in(tRX).emit('noMoreTiles', "x");
       }
     });
 
-    // socket.on('yesTrans',
-    // function() {
-    //   buildTiles();
-    // });
 
     socket.on('imDone',
     function() {
-      passes++;
-      if (passes == 2) {
+      var tRX = userGuide[socket.id];
+      var tR;
+      var tRi;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          tRi = i;
+          break;
+        }
+      }
+      tR.passes++;
+      if (tR.passes == 2) {
         var p1tot = 0;
         var p2tot = 0;
-        for (var i = 0; i < p1words.length; i++) {
-          p1tot += p1words[i].points;
+        for (var i = 0; i < tR.p1words.length; i++) {
+          p1tot += tR.p1words[i].points;
         }
-        for (var i = 0; i < p2words.length; i++) {
-          p2tot += p2words[i].points;
+        for (var i = 0; i < tR.p2words.length; i++) {
+          p2tot += tR.p2words[i].points;
         }
 
         var totPkg = {p1: p1tot, p2: p2tot};
 
-        io.emit('totScores', totPkg);
+        delete userGuide[tR.p1];
+        delete userGuide[tR.p2];
+
+        gameRooms.splice(tRi, 1);
+
+        io.in(tR.roomName).emit('totScores', totPkg);
       }
     });
 
     socket.on('sendWord', // next steps: write code for challenging, for abandoning word
     function() {
-      if(enuff >= 2) {
-      arrangeWord();
+
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
+
+      if(tR.enuff >= 2) {
+      tR.arrangeWord();
     } else {
       socket.emit('notEnuff', "x");
     }
     });
 
+    socket.on('gameInfo', // next steps: write code for challenging, for abandoning word
+    function(data) {
+
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < brokenGames.length; i++) {
+        if (brokenGames[i].roomName == tRX) {
+          tR = brokenGames[i];
+          break;
+        }
+      }
+
+      tR.gS = data.gS;
+      tR.tS = data.tS;
+
+      if (data.aS) {
+        tR.aS = data.pn;
+      } else {
+        if (data.pn == 1) {
+          tR.aS = 2;
+        } else {
+          tR.aS = 1;
+        }
+      }
+
+    });
+
     socket.on('grabbedTile',
     function(data) {
-      grabbed = true;
-      activeElement = data;
-      console.log("Here's the tile you grabbed:");
-      console.log(data);
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
+
+      tR.grabbed = true;
+      tR.activeElement = data;
+      // console.log("Here's the tile you grabbed:");
+      // console.log(data);
     });
 
     socket.on('grabbedWord',
     function(data) {
-      grabbed = true;
-      activeElement = data;
-      console.log("Here's the word you grabbed:");
-      console.log(data);
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
+      tR.grabbed = true;
+      tR.activeElement = data;
+      // console.log("Here's the word you grabbed:");
+      // console.log(data);
     });
     //
     // socket.on('grabbedWord',
@@ -306,37 +532,65 @@ io.sockets.on('connection',
 
     socket.on('grabbedBT',
     function(data) {
-      grabbed = true;
-      activeElement = data;
-      console.log("Here's the BT you grabbed:");
-      console.log(data);
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
+      tR.grabbed = true;
+      tR.activeElement = data;
+      // console.log("Here's the BT you grabbed:");
+      // console.log(data);
     });
 
     socket.on('challengeWord',
     function(data) {
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
       socket.emit('okChallenge', "x");
-      socket.broadcast.emit('waitChallenge', "x");
+      if(tR.p1 == socket.id) {
+        io.to(tR.p2).emit('waitChallenge', "x");
+      } else {
+        io.to(tR.p1).emit('waitChallenge', "x");
+      }
     });
 
 
     socket.on('cWord',
     function(data) {
-      console.log("challenging word: " + data.word);
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
+      // console.log("challenging word: " + data.word);
       if(bigDict.hasOwnProperty(data.word)) {
-        penaltySeq(data.pn);
+        tR.penaltySeq(data.pn);
       } else {
         if(data.pn == 1) {
-          var tTile = p2words[data.elt];
+          var tTile = tR.p2words[data.elt];
           tTile.vul = false;
-          p2words.splice(data.elt, 1);
-          p1words.push(tTile);
-          placeWordTiles();
+          tR.p2words.splice(data.elt, 1);
+          tR.p1words.push(tTile);
+          tR.placeWordTiles();
         } else {
-          var tTile = p1words[data.elt];
+          var tTile = tR.p1words[data.elt];
           tTile.vul = false;
-          p1words.splice(data.elt, 1);
-          p2words.push(tTile);
-          placeWordTiles();
+          tR.p1words.splice(data.elt, 1);
+          tR.p2words.push(tTile);
+          tR.placeWordTiles();
         }
       }
 
@@ -344,32 +598,78 @@ io.sockets.on('connection',
 
     socket.on('tWord',
     function(data) {
-      console.log("taking word: " + data.word);
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
+      // console.log("taking word: " + data.word);
 
         if(data.pn == 1) {
-          var tTile = p2words[data.elt];
-          p2words.splice(data.elt, 1);
-          p1words.push(tTile);
-          placeWordTiles();
+          var tTile = tR.p2words[data.elt];
+          tR.p2words.splice(data.elt, 1);
+          tR.p1words.push(tTile);
+          tR.placeWordTiles();
         } else {
-          var tTile = p1words[data.elt];
-          p1words.splice(data.elt, 1);
-          p2words.push(tTile);
-          placeWordTiles();
+          var tTile = tR.p1words[data.elt];
+          tR.p1words.splice(data.elt, 1);
+          tR.p2words.push(tTile);
+          tR.placeWordTiles();
         }
     });
 
-    socket.on('imBack',
-    function() {
-      users.push(socket.id);
-      if (p1 == 0) {
-        p1 = socket.id;
+    socket.on('repairGame',
+    function(data) {
+      var tR;
+      var pId = 0;
+      var opN;
+      for (var i = 0; i < brokenGames.length; i++) {
+        if (brokenGames[i].roomName == data.rN) {
+          if (brokenGames[i].p1friendly == data.uN) {
+            userGuide[socket.id] = brokenGames[i].roomName;
+            socket.join(brokenGames[i].roomName);
+            opN = brokenGames[i].p2friendly;
+            pId = 1;
+            brokenGames[i].p1 = socket.id;
+          } else if (brokenGames[i].p2friendly == data.uN) {
+            userGuide[socket.id] = brokenGames[i].roomName;
+            socket.join(brokenGames[i].roomName);
+            opN = brokenGames[i].p1friendly;
+            pId = 2;
+            brokenGames[i].p2 = socket.id;
+          }
+            //the gameRoom is rejoined, send update package, tell other user that he's not on pause any more, and remove room from brokenGames
+            var wbPkg = {
+              coms: brokenGames[i].comTiles,
+              blocks: brokenGames[i].blockTiles,
+              p1s: brokenGames[i].p1words,
+              p2s: brokenGames[i].p2words,
+              gS: brokenGames[i].gS,
+              tS: brokenGames[i].tS,
+              aS: brokenGames[i].aS,
+              pId: pId,
+              opN: opN
+            }
+
+          socket.emit('returnToGame', wbPkg);
+
+        if (brokenGames[i].p1 != "x" && brokenGames[i].p2 != "x") {
+          // console.log("rejoining active room");
+          gameRooms.push(brokenGames[i]);
+          io.in(brokenGames[i].roomName).emit('unbreak', "x");
+          brokenGames.splice(i, 1);
+        } else {
+          // console.log("rejoining broken room");
+          socket.emit('stayBroken', "x");
+        }
+          // else update the user but leave it paused as the room is still broken and inactive
+          break;
+        }
       }
-      if (p2 == 0) {
-        p2 = socket.id;
-      }
-      lostPlayer = false;
-      socket.broadcast.emit('tellMeStuff', "x");
+
     });
 
     socket.on('hereStuff',
@@ -393,77 +693,161 @@ io.sockets.on('connection',
 
     socket.on('dropLetter',
     function(data) {
-      console.log('dropLetter');
+      var tRX = userGuide[socket.id];
+      var tR;
+      for (var i = 0; i < gameRooms.length; i++) {
+        if (gameRooms[i].roomName == tRX) {
+          tR = gameRooms[i];
+          break;
+        }
+      }
+      // console.log('dropLetter');
       if (data.x < 150 || data.x > 1216 || data.y > 120) {
-        if (activeElement.type<4) {
-      console.log("snapping");
+        if (tR.activeElement.type<4) {
+      // console.log("snapping");
         var udPkg = {
-          type: activeElement.type,
-          element: activeElement.element,
-          xpos: activeElement.snapx,
-          ypos: activeElement.snapy
+          type: tR.activeElement.type,
+          element: tR.activeElement.element,
+          xpos: tR.activeElement.snapx,
+          ypos: tR.activeElement.snapy
           }
-          console.log(udPkg);
-          activeElement = {};
-        io.emit('updateTile', udPkg);
-      } else if (activeElement.type == 4) {
-        console.log("snapping bt")
-        var tElt = activeElement.element;
-        console.log("tile: " + blockTiles[tElt].id);
-        if (blockTiles[tElt].id == 0) {
-          console.log("can't break up word - snapping back");
-          blockTiles[tElt].x = blockTiles[tElt].snapx;
-          blockTiles[tElt].y = blockTiles[tElt].snapy;
-          placeBlockTiles();
+          // console.log(udPkg);
+          tR.activeElement = {};
+        io.in(tR.roomName).emit('updateTile', udPkg);
+      } else if (tR.activeElement.type == 4) {
+        // console.log("snapping bt")
+        var tElt = tR.activeElement.element;
+        // console.log("tile: " + tR.blockTiles[tElt].id);
+        if (tR.blockTiles[tElt].id == 0) {
+          // console.log("can't break up word - snapping back");
+          tR.blockTiles[tElt].x = tR.blockTiles[tElt].snapx;
+          tR.blockTiles[tElt].y = tR.blockTiles[tElt].snapy;
+          tR.placeBlockTiles();
         } else {
-          enuff--;
-          for (var i = 0; i < comTiles.length; i++) {
-            if (comTiles[i].id == blockTiles[tElt].id) {
-              console.log("making visible: " + comTiles[i].letter);
-              comTiles[i].disp = true;
-              comTiles[i].x = comTiles[i].snapx;
-              comTiles[i].y = comTiles[i].snapy;
+          tR.enuff--;
+          for (var i = 0; i < tR.comTiles.length; i++) {
+            if (tR.comTiles[i].id == tR.blockTiles[tElt].id) {
+              // console.log("making visible: " + tR.comTiles[i].letter);
+              tR.comTiles[i].disp = true;
+              tR.comTiles[i].x = tR.comTiles[i].snapx;
+              tR.comTiles[i].y = tR.comTiles[i].snapy;
             }
           }
-          blockTiles.splice(tElt, 1);
-          placeBlockTiles();
+          tR.blockTiles.splice(tElt, 1);
+          tR.placeBlockTiles();
         }
       }
       } else {
-        console.log("moving to block");
-        moveToBlock(data);
+        // console.log("moving to block");
+        tR.moveToBlock(data);
       }
 
     });
 
     socket.on('disconnect', function() {
-      var tU;
-      for (var i = 0; i < users.length; i++) {
-        if(users[i] = socket.id) {
-          users.splice(i, 1);
+      for (var i = 0; i < waiters.length; i++) {
+        if (waiters[i].name == socket.id) {
+          waiters.splice(i, 1);
+          socket.leave('waitingRoom');
+          io.in('waitingRoom').emit('weWait', waiters);
         }
       }
-      if (p1 == socket.id) {
-        p1 = 0;
-        lostPlayer = true;
-      }
-      if (p2 == socket.id) {
-        p2 = 0;
-        lostPlayer = true;
-      }
-      console.log("Client has disconnected");
+      scrubUser(socket.id);
+      // var tU;
+      // for (var i = 0; i < users.length; i++) {
+      //   if(users[i] = socket.id) {
+      //     users.splice(i, 1);
+      //   }
+      // }
+      // if (p1 == socket.id) {
+      //   p1 = 0;
+      //   lostPlayer = true;
+      // }
+      // if (p2 == socket.id) {
+      //   p2 = 0;
+      //   lostPlayer = true;
+      // }
+      // console.log("Client has disconnected");
     });
   }
 );
 
 console.log("My socket server is running, fool");
 
-function oldPS() {
-  placeWordTiles();
+function nameGen() {
+  return Math.random().toString(36).substr(2, 6);
+}
+
+function charGen() {
+  return Math.random().toString(36).substr(2, 1);
 }
 
 function penaltySeq(playNum) {
   io.emit('penSeq', playNum);
+}
+
+function scrubUser(user){
+
+  var tRX = userGuide[user];
+  if(tRX) {
+  var tR;
+  var tRi;
+  var bGb = false;
+  for (var i = 0; i < gameRooms.length; i++) {
+    if (gameRooms[i].roomName == tRX) {
+      tR = gameRooms[i];
+      tRi = i;
+      break;
+    }
+  }
+
+if (brokenGames.length > 0) {
+  for (var i = 0; i < brokenGames.length; i++) {
+    if (brokenGames[i].roomName == tRX) {
+      tR = brokenGames[i];
+      tRi = i;
+      bGb = true;
+    }
+  }
+}
+
+  delete userGuide[user];
+
+  if(!bGb) {
+  if(tR.p1 == user) {
+    tR.p1 = "x";
+  } else if (tR.p2 == user) {
+    tR.p2 = "x";
+  }
+  brokenGames.push(tR);
+  var joint = " & ";
+  var friendMaker = tR.p1friendly.concat(joint, tR.p2friendly);
+  tR.roomFriendly = friendMaker;
+  gameRooms.splice(tRi, 1);
+  // console.log("broke game: " + tR.roomFriendly);
+  io.in(tR.roomName).emit("brokenGame", "x");
+} else {
+  // console.log("broke twice!");
+  // console.log("users: " + Object.keys(userGuide).length);
+  if(tR.p1 == user) {
+    tR.p1 = "x";
+  } else if (tR.p2 == user) {
+    tR.p2 = "x";
+  }
+}
+  }
+
+}
+
+function kickOffGame(gameRm) {
+  // console.log('kicking off game for ' + gameRm.roomName);
+  userGuide[gameRm.p1] = gameRm.roomName;
+  userGuide[gameRm.p2] = gameRm.roomName;
+  for(var i = 0; i < gameRooms.length; i++) {
+    // console.log("Room " + i + " is named " + gameRooms[i].roomName + " and contains " + gameRooms[i].p1friendly + " and " + gameRooms[i].p2friendly);
+  }
+  // console.log(userGuide);
+  io.in(gameRm.roomName).emit('afoot', gameRm);
 }
 
 function arrangeWord() {
@@ -497,34 +881,34 @@ function moveToBlock(data) {
 function moveBlockTile(data) {
   var snip = activeElement.element;
   var tempT = blockTiles[snip];
-  console.log("placing tile: " + tempT);
+  // console.log("placing tile: " + tempT);
   var tempBt = blockTiles;
-  console.log("blockTiles length:" + tempBt.length);
+  // console.log("blockTiles length:" + tempBt.length);
 
   blockTiles.splice(snip, 1);
 
-  console.log("removed element. new length: " + blockTiles.length);
+  // console.log("removed element. new length: " + blockTiles.length);
 
   if (data.x < blockTiles[0].x) {
     blockTiles.unshift(tempT);
   } else if (data.x > blockTiles[blockTiles.length-1].x) {
     blockTiles.push(tempT);
   } else {
-    console.log("i am here")
+    // console.log("i am here")
     var buildBt = [];
     for(var i = 0; i< blockTiles.length; i++) {
       buildBt.push(blockTiles[i]);
     }
-    console.log ("working length: " + blockTiles.length);
-    console.log ("buildBt working length: " + buildBt.length);
+    // console.log ("working length: " + blockTiles.length);
+    // console.log ("buildBt working length: " + buildBt.length);
   for(var i = 0; i < blockTiles.length-1; i++) {
     if (data.x >= blockTiles[i].x && data.x < blockTiles[i+1].x){
       buildBt.splice(i+1, 0, tempT);
     }
   }
 
-      console.log ("inserted elt. new buildBt working length: " + buildBt.length);
-      console.log ("blocktiles working length: " + blockTiles.length);
+      // console.log ("inserted elt. new buildBt working length: " + buildBt.length);
+      // console.log ("blocktiles working length: " + blockTiles.length);
   blockTiles = buildBt;
 
         console.log ("blocktiles new working length: " + blockTiles.length);
@@ -534,16 +918,19 @@ function moveBlockTile(data) {
 
 
 function wordToBlock(type, index, data) {
-  console.log('word to block');
+  // console.log('word to block');
   var pushingLetters = [];
   var pushingTiles = [];
+  var addWord;
   if(type == 2) {
     p1words[index].x = data.x;
     p1words[index].disp = false;
+    addWord = p1words[index].word;
     pushingLetters = p1words[index].word.split('');
   } else if (type == 3) {
     p2words[index].x = data.x;
     p2words[index].disp = false;
+    addWord = p1words[index].word;
     pushingLetters = p2words[index].word.split('');
   }
 
@@ -552,7 +939,7 @@ function wordToBlock(type, index, data) {
     pushingTiles.push(new LetterTile(tLet, valCat[tLet], 0, 0, 0));
   }
 
-  console.log('placing word tiles on block');
+  // console.log('placing word tiles on block');
   if (blockTiles.length == 0) {
     blockTiles = pushingTiles;
     placeBlockTiles();
@@ -570,14 +957,14 @@ function wordToBlock(type, index, data) {
       var newBT = [];
     for (var i = 1; i < blockTiles.length; i++) {
       if (data.x > blockTiles[i-1].x && data.x < blockTiles[i].x) {
-        console.log ('splitting tiles');
+        // console.log ('splitting tiles');
         var arr1 = blockTiles.slice(0, i);
         var arr2 = blockTiles.slice(i, blockTiles.length);
         newBT = arr1.concat(pushingTiles, arr2);
       } //this is where i am... it almost works
         }
         blockTiles = newBT;
-        console.log('tile between tiles');
+        // console.log('tile between tiles');
         placeBlockTiles();
     }
   }
@@ -585,24 +972,24 @@ function wordToBlock(type, index, data) {
 
 function tileToBlock(index, data) {
   comTiles[index].x = data.x;
-  console.log('placing tile on block: ' + comTiles[index].id);
+  // console.log('placing tile on block: ' + comTiles[index].id);
   if (blockTiles.length == 0) {
     blockTiles.push(comTiles[index]);
     comTiles[index].disp = false;
-    console.log('first tile placed');
+    // console.log('first tile placed');
     placeBlockTiles();
   } else {
     if(comTiles[index].x < blockTiles[0].x) {
-      console.log("dropping tile at X: " + comTiles[index].x + " against blockTile at " + blockTiles[0].x);
+      // console.log("dropping tile at X: " + comTiles[index].x + " against blockTile at " + blockTiles[0].x);
       blockTiles.splice(0, 0, comTiles[index]);
       comTiles[index].disp = false;
-      console.log('placing new tile at beginning');
+      // console.log('placing new tile at beginning');
       placeBlockTiles();
     } else if (comTiles[index].x > blockTiles[blockTiles.length-1].x) {
-      console.log("dropping tile at X: " + comTiles[index].x + " against blockTile at " + blockTiles[0].x);
+      // console.log("dropping tile at X: " + comTiles[index].x + " against blockTile at " + blockTiles[0].x);
       blockTiles.push(comTiles[index]);
       comTiles[index].disp = false;
-      console.log('new tile at end');
+      // console.log('new tile at end');
       placeBlockTiles();
     } else {
     for (var i = 0; i < blockTiles.length-1; i++) {
@@ -611,7 +998,7 @@ function tileToBlock(index, data) {
       comTiles[index].disp = false;
         }
       }
-      console.log('tile between tiles');
+      // console.log('tile between tiles');
       placeBlockTiles();
     }
   }
@@ -698,7 +1085,7 @@ function placeWordTiles() {
 
   if (comTiles.length > 0) {buildTiles();} //this is letting in some asynchronicity so a good place to start hunting gremlins...
 
-  var udWordPkg = {p1: p1words, p2: p2words};
+  var udWordPkg = {p1: p1words, p2: p2words, coms: comTiles.length};
 
   blockTiles = [];
 
@@ -711,7 +1098,7 @@ function placeBlockTiles() {
   for(var i = 0; i < blockTiles.length; i++) {
     blockTiles[i].x = startPlace + i*70;
     blockTiles[i].y = 60;
-    console.log("tile " + i + " is " + blockTiles[i].letter + " at " + blockTiles[i].x);
+    // console.log("tile " + i + " is " + blockTiles[i].letter + " at " + blockTiles[i].x);
   }
   grabbed = false;
   activeElement = {};
@@ -719,7 +1106,7 @@ function placeBlockTiles() {
 }
 
 function sendLists() {
-  console.log("sending lists. enuff: " + enuff);
+  // console.log("sending lists. enuff: " + enuff);
   var listPkg = {
     coms: comTiles,
     blocks: blockTiles,
@@ -734,45 +1121,383 @@ function dropTile() {
 
 }
 
-function buildTiles() {
+// function buildTTTiles(data) {
+//
+//   data.comTiles[0].x = 683;
+//   data.comTiles[0].y = 200;
+//   data.comTiles[0].xmin = data.comTiles[0].x - 30;
+//   data.comTiles[0].xmax = data.comTiles[0].x + 30;
+//   data.comTiles[0].ymin = data.comTiles[0].y - 40;
+//   data.comTiles[0].ymax = data.comTiles[0].y + 40;
+//   data.comTiles[0].snapx = data.comTiles[0].x;
+//   data.comTiles[0].snapy = data.comTiles[0].y;
+//
+//   if (data.comTiles.length > 1) {
+//   for (var i = 1; i < data.comTiles.length; i++) {
+//     var ns = Math.floor((i-1)/2);
+//     if (i % 2 == 0) {
+//       data.comTiles[i].x = 733;
+//     } else {
+//       data.comTiles[i].x = 633;
+//     }
+//
+//     data.comTiles[i].y = ns * 100 + 300;
+//     data.comTiles[i].xmin = data.comTiles[i].x - 30;
+//     data.comTiles[i].xmax = data.comTiles[i].x + 30;
+//     data.comTiles[i].ymin = data.comTiles[i].y - 40;
+//     data.comTiles[i].ymax = data.comTiles[i].y + 40;
+//     data.comTiles[i].snapx = data.comTiles[i].x;
+//     data.comTiles[i].snapy = data.comTiles[i].y;
+//     }
+//   }
+//     return data;
+// }
 
-  comTiles[0].x = 683;
-  comTiles[0].y = 200;
-  comTiles[0].xmin = comTiles[0].x - 30;
-  comTiles[0].xmax = comTiles[0].x + 30;
-  comTiles[0].ymin = comTiles[0].y - 40;
-  comTiles[0].ymax = comTiles[0].y + 40;
-  comTiles[0].snapx = comTiles[0].x;
-  comTiles[0].snapy = comTiles[0].y;
-
-  if (comTiles.length > 1) {
-  for (var i = 1; i < comTiles.length; i++) {
-    var ns = Math.floor((i-1)/2);
-    if (i % 2 == 0) {
-      comTiles[i].x = 733;
-    } else {
-      comTiles[i].x = 633;
-    }
-
-    comTiles[i].y = ns * 100 + 300;
-    comTiles[i].xmin = comTiles[i].x - 30;
-    comTiles[i].xmax = comTiles[i].x + 30;
-    comTiles[i].ymin = comTiles[i].y - 40;
-    comTiles[i].ymax = comTiles[i].y + 40;
-    comTiles[i].snapx = comTiles[i].x;
-    comTiles[i].snapy = comTiles[i].y;
-    }
-  }
-        io.emit('hereTile', comTiles);
-}
-
-function getStarted() {
+function getStarted(roomObj) {
   allTiles = shuffle(allTiles);
 
 for (var i = 0; i < allTiles.length; i++) {
-  specTiles.push(new LetterTile(allTiles[i][0], allTiles[i][1], 0, 0, i+1));
+  roomObj.specTiles.push(new LetterTile(allTiles[i][0], allTiles[i][1], 0, 0, i+1));
   }
 }
+
+function GameRoom(roomName, p1, p1friendly) {
+  this.roomName = roomName;
+  this.open = true;
+  this.p1 = p1;
+  this.p2 = 0;
+  this.specTiles = [];
+  this.comTiles = [];
+  this.blockTiles = [];
+  this.p1words = [];
+  this.p2words = [];
+  this.p1friendly = p1friendly;
+  this.p2friendly = '';
+  this.roomFriendly;
+  this.occupants = 1;
+  this.dragX = 0;
+  this.dragY = 0;
+  this.grabbed = false;
+  this.activeElement = {};
+  this.pNum = 0;
+  this.enuff = 0;
+  this.tComs;
+  this.tBlocks;
+  this.tP1s;
+  this.tP2s;
+  this.tEnuff;
+  this.passes = 0;
+  this.gS;
+  this.tS;
+  this.aS;
+}
+
+GameRoom.prototype.buildTiles = function() {
+    console.log("building tiles for room " + this.roomName);
+    if (this.comTiles.length > 0) {
+    this.comTiles[0].x = 683;
+    this.comTiles[0].y = 200;
+    this.comTiles[0].xmin = this.comTiles[0].x - 30;
+    this.comTiles[0].xmax = this.comTiles[0].x + 30;
+    this.comTiles[0].ymin = this.comTiles[0].y - 40;
+    this.comTiles[0].ymax = this.comTiles[0].y + 40;
+    this.comTiles[0].snapx = this.comTiles[0].x;
+    this.comTiles[0].snapy = this.comTiles[0].y;
+  }
+
+    if (this.comTiles.length > 1) {
+    for (var i = 1; i < this.comTiles.length; i++) {
+      var ns = Math.floor((i-1)/2);
+      if (i % 2 == 0) {
+        this.comTiles[i].x = 733;
+      } else {
+        this.comTiles[i].x = 633;
+      }
+
+      this.comTiles[i].y = ns * 100 + 300;
+      this.comTiles[i].xmin = this.comTiles[i].x - 30;
+      this.comTiles[i].xmax = this.comTiles[i].x + 30;
+      this.comTiles[i].ymin = this.comTiles[i].y - 40;
+      this.comTiles[i].ymax = this.comTiles[i].y + 40;
+      this.comTiles[i].snapx = this.comTiles[i].x;
+      this.comTiles[i].snapy = this.comTiles[i].y;
+      }
+    }
+
+          var strName = this.roomName.toString();
+          io.in(strName).emit('hereTile', this.comTiles);
+  }
+
+  GameRoom.prototype.manageTiles = function() {
+    var udPkg = {
+      type: this.activeElement.type,
+      element: this.activeElement.element,
+      xpos: this.dragX,
+      ypos: this.dragY
+      }
+      // console.log("x is now " + udPkg.xpos);
+    io.to(this.roomName).emit('updateTile', udPkg);
+  }
+
+  GameRoom.prototype.placeBlockTiles = function() {
+    var wordLength = (this.blockTiles.length - 1) * 70;
+    var startPlace = 683 - (wordLength/2);
+    for(var i = 0; i < this.blockTiles.length; i++) {
+      this.blockTiles[i].x = startPlace + i*70;
+      this.blockTiles[i].y = 60;
+    }
+    this.grabbed = false;
+    this.activeElement = {};
+    this.sendLists();
+  }
+
+  GameRoom.prototype.sendLists = function() {
+    var listPkg = {
+      coms: this.comTiles,
+      blocks: this.blockTiles,
+      p1s: this.p1words,
+      p2s: this.p2words,
+      enuff: this.enuff
+    }
+    io.in(this.roomName).emit('revLists', listPkg);
+  }
+
+  GameRoom.prototype.moveToBlock = function(data) {
+
+    if(this.activeElement.type == 2 || this.activeElement.type == 3) {
+      this.enuff++;
+      this.wordToBlock(this.activeElement.type, this.activeElement.element, data);
+    } else if (this.activeElement.type == 1) {
+      this.enuff++;
+      this.tileToBlock(this.activeElement.element, data);
+    } else if (this.activeElement.type == 4) {
+      this.moveBlockTile(data);
+    }
+  }
+
+  GameRoom.prototype.wordToBlock = function(type, index, data) {
+    // console.log('word to block');
+    var pushingLetters = [];
+    var pushingTiles = [];
+    var addWord;
+    if(type == 2) {
+      this.p1words[index].x = data.x;
+      this.p1words[index].disp = false;
+      addWord = this.p1words[index].word;
+      pushingLetters = this.p1words[index].word.split('');
+    } else if (type == 3) {
+      this.p2words[index].x = data.x;
+      this.p2words[index].disp = false;
+      addWord = this.p2words[index].word;
+      pushingLetters = this.p2words[index].word.split('');
+    }
+
+    io.in(this.roomName).emit('initWord', addWord);
+
+    for (var i = 0; i < pushingLetters.length; i++) {
+      var tLet = pushingLetters[i];
+      pushingTiles.push(new LetterTile(tLet, valCat[tLet], 0, 0, 0));
+    }
+
+    // console.log('placing word tiles on block');
+    if (this.blockTiles.length == 0) {
+      this.blockTiles = pushingTiles;
+      this.placeBlockTiles();
+    } else {
+      if(data.x <= this.blockTiles[0].x) {
+        var tempBlock = pushingTiles.concat(this.blockTiles);
+        this.blockTiles = tempBlock;
+        this.placeBlockTiles();
+      } else if (data.x > this.blockTiles[this.blockTiles.length-1].x) {
+        var tempBlock = this.blockTiles.concat(pushingTiles);
+        this.blockTiles = tempBlock;
+        this.placeBlockTiles();
+      } else {
+
+        var newBT = [];
+      for (var i = 1; i < this.blockTiles.length; i++) {
+        if (data.x > this.blockTiles[i-1].x && data.x < this.blockTiles[i].x) {
+          // console.log ('splitting tiles');
+          var arr1 = this.blockTiles.slice(0, i);
+          var arr2 = this.blockTiles.slice(i, blockTiles.length);
+          newBT = arr1.concat(pushingTiles, arr2);
+        } //this is where i am... it almost works
+          }
+          this.blockTiles = newBT;
+          // console.log('tile between tiles');
+          this.placeBlockTiles();
+      }
+    }
+  }
+
+  GameRoom.prototype.tileToBlock = function(index,data) {
+    this.comTiles[index].x = data.x;
+    // console.log('placing tile on block: ' + this.comTiles[index].id);
+    if (this.blockTiles.length == 0) {
+      this.blockTiles.push(this.comTiles[index]);
+      this.comTiles[index].disp = false;
+      // console.log('first tile placed');
+      this.placeBlockTiles();
+    } else {
+      if(this.comTiles[index].x < this.blockTiles[0].x) {
+        // console.log("dropping tile at X: " + this.comTiles[index].x + " against blockTile at " + this.blockTiles[0].x);
+        this.blockTiles.splice(0, 0, this.comTiles[index]);
+        this.comTiles[index].disp = false;
+        // console.log('placing new tile at beginning');
+        this.placeBlockTiles();
+      } else if (this.comTiles[index].x > this.blockTiles[this.blockTiles.length-1].x) {
+        // console.log("dropping tile at X: " + this.comTiles[index].x + " against blockTile at " + this.blockTiles[0].x);
+        this.blockTiles.push(this.comTiles[index]);
+        this.comTiles[index].disp = false;
+        // console.log('new tile at end');
+        this.placeBlockTiles();
+      } else {
+      for (var i = 0; i < this.blockTiles.length-1; i++) {
+        if (this.comTiles[index].x > this.blockTiles[i].x && this.comTiles[index].x < this.blockTiles[i+1].x) {
+          this.blockTiles.splice(i+1, 0, this.comTiles[index]);
+        this.comTiles[index].disp = false;
+          }
+        }
+        // console.log('tile between tiles');
+        this.placeBlockTiles();
+      }
+    }
+  }
+
+  GameRoom.prototype.moveBlockTile = function(data) {
+    var snip = this.activeElement.element;
+    var tempT = this.blockTiles[snip];
+    // console.log("placing tile: " + tempT);
+    var tempBt = this.blockTiles;
+    // console.log("blockTiles length:" + tempBt.length);
+
+    this.blockTiles.splice(snip, 1);
+
+    // console.log("removed element. new length: " + this.blockTiles.length);
+
+    if (data.x < this.blockTiles[0].x) {
+      this.blockTiles.unshift(tempT);
+    } else if (data.x > this.blockTiles[this.blockTiles.length-1].x) {
+      this.blockTiles.push(tempT);
+    } else {
+      // console.log("i am here")
+      var buildBt = [];
+      for(var i = 0; i< this.blockTiles.length; i++) {
+        buildBt.push(this.blockTiles[i]);
+      }
+      // console.log ("working length: " + this.blockTiles.length);
+      // console.log ("buildBt working length: " + buildBt.length);
+    for(var i = 0; i < this.blockTiles.length-1; i++) {
+      if (data.x >= this.blockTiles[i].x && data.x < this.blockTiles[i+1].x){
+        buildBt.splice(i+1, 0, tempT);
+      }
+    }
+
+        // console.log ("inserted elt. new buildBt working length: " + buildBt.length);
+        // console.log ("blocktiles working length: " + this.blockTiles.length);
+    this.blockTiles = buildBt;
+
+          // console.log ("blocktiles new working length: " + this.blockTiles.length);
+   }
+   this.placeBlockTiles();
+  }
+
+  GameRoom.prototype.arrangeWord = function() {
+    var blockWord;//not done yet
+    var blockLetters = [];
+    var blockVal = 0;
+    for (var i = 0; i < this.blockTiles.length; i++) {
+      blockLetters.push(this.blockTiles[i].letter);
+      blockVal += this.blockTiles[i].points;
+    }
+
+    blockWord = blockLetters.join('');
+
+    blockPkg = {word: blockWord, valu: blockVal};
+
+    this.makeWord(blockPkg);
+  }
+
+  GameRoom.prototype.makeWord = function(data) {
+    this.enuff = 0;
+    var tWord = new WordTile(data.word, data.valu);
+    tWord.breadth = tWord.word.length;
+    if (this.pNum == 1) {
+      this.p1words.push(tWord);
+    } else {
+      this.p2words.push(tWord);
+    }
+    this.placeWordTiles();
+  }
+
+  GameRoom.prototype.placeWordTiles = function() {
+    if(this.p1words.length > 0) {
+      var tempP1 = [];
+      for (var i = 0; i < this.p1words.length; i++){
+        if (this.p1words[i].disp) {
+          tempP1.push(this.p1words[i]);
+        }
+      }
+      this.p1words = tempP1; // gets rid of dead words
+      var lCounter = 0;
+      var lC2 = 0;
+      for (var i = 0; i < this.p1words.length; i++){
+        var wordBreadth = this.p1words[i].breadth * 30;
+        if (lCounter + wordBreadth >= 563) {
+          lCounter = 0;
+          lC2 += 50;
+        }
+        this.p1words[i].x = 20 + lCounter;
+        this.p1words[i].y = lC2 + 164;
+        lCounter += wordBreadth + 10;
+      }
+    }
+
+    if(this.p2words.length > 0) {
+      var tempP2 = [];
+      for (var i = 0; i < this.p2words.length; i++){
+        if (this.p2words[i].disp) {
+          tempP2.push(this.p2words[i]);
+        }
+      }
+      this.p2words = tempP2; // gets rid of dead words
+      var lCounter = 0;
+      var lC2 = 0;
+      for (var i = 0; i < this.p2words.length; i++){
+        var wordBreadth = this.p2words[i].breadth * 30;
+        if (lCounter + wordBreadth >= 563) {
+          lCounter = 0;
+          lC2 += 50;
+        }
+        this.p2words[i].x = 1346 - lCounter - wordBreadth;
+        this.p2words[i].y = lC2 + 164;
+        lCounter += wordBreadth + 10;
+      }
+    }
+
+    var tempComs = [];
+
+    for (var i = 0; i < this.comTiles.length; i++) {
+      if (this.comTiles[i].disp) {
+        tempComs.push(this.comTiles[i]);
+      }
+    }
+
+    this.comTiles = tempComs;
+
+    if (this.comTiles.length > 0) {this.buildTiles();} //this is letting in some asynchronicity so a good place to start hunting gremlins...
+
+    var udWordPkg = {p1: this.p1words, p2: this.p2words, coms: this.comTiles.length};
+
+    this.blockTiles = [];
+
+    io.in(this.roomName).emit('updateWords', udWordPkg);
+  }
+
+  GameRoom.prototype.penaltySeq = function(data) {
+    io.in(this.roomName).emit('penSeq', data);
+  }
+
 
 function WordTile(word, points) {
   this.word = word;

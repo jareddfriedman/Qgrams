@@ -1,6 +1,6 @@
 var socket;
 
-var gameState = 11; // 0 and 1 are beginning states, 2 is the game, 3 is the end sequence, 4 is instructions, 5 is pause
+var gameState = 0; // 0 and 1 are beginning states, 2 is the game, 3 is the end sequence, 4 is instructions, 5 is pause
 
 var turnState = 0; // turnState 1 is "player X draw", 2 is "player X make a word", 3 is challenging a word, 4 is penalty for bad challenge
 
@@ -20,8 +20,6 @@ var blockTiles = [];
 
 var pn = 0;
 var opn = 0;
-
-var opName;
 
 var p1words = [];
 var p2words = [];
@@ -48,30 +46,6 @@ var pageState = 0;
 var showHow = false;
 
 var rejoiner = false;
-
-var username = "";
-
-var usernameLetters = [];
-
-var waiters = [];
-
-var brokenGames = [];
-
-var socketID;
-
-var propUser;
-
-var broken = false;
-
-var tooShort = false;
-
-var oldRoot = false;
-
-var initWords = [];
-
-var prefixes = ["un", "in", "pre", "non", "re", "de", "dis"];
-
-var suffixes = ["s", "es", "ed", "er", "ers", "ing", "ly", "ship", "ish", "ous", "ist", "est", "y", "iest", "ier"];
 
 function preload() {
   regFont = loadFont('Museo_Slab_500_2.otf');
@@ -100,11 +74,6 @@ function setup() {
       } else if (pn == 2) {opn = 1;}
       else if (pn == 3) {gameState = 10;}
     });
-
-    socket.on('yourID',
-      function(data) {
-        socketID = data;
-      });
 
   socket.on('test',
     function(data) {
@@ -143,59 +112,8 @@ function setup() {
       gameState = 2;
   });
 
-  socket.on('brokenGame',
-    function() {
-      broken = true;
-      var bgPkg = {
-        gS: gameState,
-        tS: turnState,
-        aS: actState,
-        pn: pn
-      }
-      socket.emit('gameInfo', bgPkg);
-    });
-
-    socket.on('returnToGame',
-      function(data) {
-        comTiles = data.coms;
-        blockTiles = data.blocks;
-        p1words = data.p1s;
-        p2words = data.p2s;
-        gameState = data.gS;
-        turnState = data.tS;
-        pn = data.pId;
-        if (pn == 1) {
-          opn = 2;
-        } else if (pn == 2) {
-          opn = 1;
-        }
-        opName = data.opN;
-
-        if (pn == data.aS) {
-          actState = true;
-        } else {
-          actState = false;
-        }
-      });
-
-  socket.on('unbreak',
-          function() {
-            broken = false;
-          });
-
-  socket.on('stayBroken',
-          function() {
-            broken = true;
-          });
-
-  socket.on('initWord',
-      function(data) {
-        initWords.push(data);
-      });
-
   socket.on('hereTile',
     function(data) {
-      console.log(data)
       //fadeTime = transTime;
       comTiles = data;
       actState = !actState;
@@ -262,12 +180,10 @@ function setup() {
       console.log("comtiles: " + comTiles.length + " blockTiles: " + blockTiles.length + " p1words: " + p1words.length + " p2words: " + p2words.length);
     });
 
-    socket.on('tossBack',
+    socket.on('endTurn',
     function(data) {
       comTiles = data.coms;
       blockTiles = data.blocks;
-      p1words = data.p1s;
-      p2words = data.p2s;
 
       turnState = 1;
       actState = !actState;
@@ -277,9 +193,6 @@ function setup() {
     function(data) {
       p1words = data.p1;
       p2words = data.p2;
-      if (data.coms == 0) {
-        comTiles = [];
-      }
       blockTiles = [];
       turnState = 1;
       transState = false;
@@ -312,7 +225,6 @@ function setup() {
 
     socket.on('notEnuff',
     function() {
-      fadeTime = transTime;
       notEnuff = true;
     });
 
@@ -346,80 +258,6 @@ function setup() {
       if (pn == 1) {opn = 2;} else {opn = 1;}
     });
 
-    socket.on('signedIn',
-    function() {
-      gameState = 12;
-    });
-
-    socket.on('waitHere',
-    function() {
-      gameState = 13;
-    });
-
-    socket.on('weWait',
-    function(data) {
-      waiters = data;
-      calcWaiters();
-    });
-
-    socket.on('thisGuy',
-    function(data) {
-      propUser = data;
-      gameState = 17;
-    });
-
-    socket.on('joinMe',
-    function(data) {
-      socket.emit('joined', data);
-    });
-
-    socket.on('missedCon',
-    function() {
-      gameState = 18;
-    });
-
-    socket.on('noReturn',
-    function() {
-      gameState = 18;
-    });
-
-    socket.on('nobodyName',
-    function() {
-      username = "";
-      gameState = 20;
-    });
-
-    socket.on('hereBroken',
-    function(data) {
-      console.log(data);
-      brokenGames = data;
-      calcBG();
-    });
-
-
-
-    socket.on('afoot',
-    function(data) {
-      console.log('afooting');
-      fadeTime = transTime;
-      transState = true;
-      if(socketID == data.p1) {
-        pn = 1;
-        opn = 2;
-        opName = data.p2friendly;
-        gameState = 19;
-        turnState = 1;
-        actState = true;
-      } else {
-        pn = 2;
-        opn = 1;
-        opName = data.p1friendly;
-        gameState = 19;
-        turnState = 1;
-        actState = false;//here you left it
-      }
-
-    });
 
 
     fill(230, 255, 215);
@@ -489,63 +327,6 @@ function draw() {
   if (gameState == 10) {
     tooMany();
   }
-
-  if (gameState == 11) {
-    enterName();
-  }
-
-  if (gameState == 12) {
-    vestibule();
-  }
-
-  if (gameState == 13) {
-    waitRando();
-  }
-
-  if (gameState == 14) {
-    waitFriend();
-  }
-
-  if (gameState == 15) {
-    showWaiters(waiters);
-  }
-
-  if (gameState == 16) {
-    waitResp();
-  }
-
-  if (gameState == 17) {
-    askUser();
-  }
-
-  if (gameState == 18) {
-    reVestibule();
-  }
-
-  if (gameState == 19) {
-    introducePlayers();
-  }
-
-  if (gameState == 20) {
-    noNameVest();
-  }
-
-  if (gameState == 21) {
-    showBG();
-  }
-
-  if(broken) {
-    brokenScreen();
-  }
-
-  if(oldRoot) {
-    rootAnim();
-  }
-
-  if(tooShort) {
-    shortAnim();
-  }
-
   pop();
 }
 
@@ -576,376 +357,16 @@ function runGame() {
   idAnim();
 }
 
-function brokenScreen() {
-  background(0, 0, 0, 150);
-
-  push();
-  fill(230, 255, 215);
-  strokeWeight(2);
-  stroke(50, 80, 0);
-
-  textSize(60);
-
-
-
-  textAlign(CENTER, CENTER);
-  text("HRMM... SEEMS LIKE " + opName.toUpperCase() + "\nDISCONNECTED... YOU CAN WAIT\nHERE FOR THEM OR REFRESH\nTO RETURN TO THE LOBBY", 683, 174);
-  pop();
-}
-
-function introducePlayers() {
-  var fadeTime2 = transTime - fadeTime;
-  if (fadeTime2 >= 180) {
-    transState = false;
-    gameState = 2;
-  }
-
-  var fadeBk = map(fadeTime2, 0, 180, 150, 0);
-  background(0, 0, 0, fadeBk);
-
-  push();
-  fill(230, 255, 215);
-  strokeWeight(2);
-  stroke(50, 80, 0);
-
-  textSize(60);
-
-
-
-  textAlign(CENTER, CENTER);
-  text(username.toUpperCase() + ", MEET " + opName.toUpperCase() + "!\nLET'S PLAY QUARANTINAGRAMS!", 683, 174);
-  pop();
-}
-
-function enterName() {
-  background(0, 0, 0, 150);
-  noStroke();
-  fill(230, 255, 215);
-
-  textAlign(CENTER, CENTER);
-  textSize(48);
-
-  text("Type your name and press \"enter\".", 683, 65);
-  textSize(90);
-  text(username.toUpperCase(), 683, 360);
-}
-
-function noNameVest() {
-  background(0, 0, 0, 150);
-  noStroke();
-  fill(230, 255, 215);
-
-  textAlign(CENTER, CENTER);
-  textSize(48);
-
-  text("It doesn't look like there are any games\nmissing a player by that name...\nRe-enter your name here!", 683, 65);
-  textSize(90);
-  text(username.toUpperCase(), 683, 360);
-}
-
-function waitRando() {
-  background(0, 0, 0, 150);
-  noStroke();
-  fill(230, 255, 215);
-
-  textAlign(CENTER, CENTER);
-  textSize(60);
-
-  text("Super! We're matching you up now!", 683, 360);
-}
-
-function waitResp() {
-  background(0, 0, 0, 150);
-  noStroke();
-  fill(230, 255, 215);
-
-  textAlign(CENTER, CENTER);
-  textSize(60);
-
-  text("Super! We're matching you up now!", 683, 360);
-}
-
-function waitFriend() {
-  background(0, 0, 0, 150);
-  noStroke();
-  fill(230, 255, 215);
-
-  textAlign(CENTER, CENTER);
-  textSize(60);
-
-  text("There isn't anyone currently waiting for a friend.\nWhen your friend shows up, they'll see you\nand the game will start.", 683, 260);
-}
-
-function calcWaiters() {
-
-  for (var i = 0; i < waiters.length; i++) {
-    if (waiters[i].name == socketID) {
-      waiters.splice(i, 1);
-    }
-  }
-
-  var lCounter = 0;
-  var lC2 = 0;
-  for (var i = 0; i < waiters.length; i++){
-    var tLets = waiters[i].friendly.split('');
-    waiters[i].letters = tLets;
-    var wordBreadth = waiters[i].friendly.length * 60;
-    if (lCounter + wordBreadth >= 1200) {
-      lCounter = 0;
-      lC2 += 100;
-    }
-    waiters[i].x = 83 + lCounter;
-    waiters[i].y = lC2 + 184;
-    lCounter += wordBreadth + 20;
-  }
-    // for (var i = 0; i < waiters.length; i++) {
-    //
-    //   var tLets = waiters[i].friendly.split('');
-    //   waiters[i].letters = tLets;
-    //   waiters[i].x = 683 - ((tLets.length-1) * 30)
-    //   waiters[i].y = i * 120 + 350;
-    // }
-
-    gameState = 15;
-
-}
-
-function calcBG() {
-
-  for(var i = 0; i < brokenGames.length; i ++) {
-    var tName;
-    if (username.toUpperCase() == brokenGames[i].p1friendly.toUpperCase()) {
-      tName = brokenGames[i].p2friendly;
-    } else {
-      tName = brokenGames[i].p1friendly;
-    }
-    brokenGames[i].tName = tName;
-    brokenGames[i].x = 683 - (brokenGames[i].tName.length-1)*30;
-    brokenGames[i].y = i * 100 + 300;
-  }
-
-    gameState = 21;
-
-}
-
-function showBG() {
-  background(0, 0, 0, 150);
-  noStroke();
-  fill(230, 255, 215);
-
-  textAlign(CENTER, CENTER);
-  textSize(40);
-
-  if(brokenGames.length > 0) {
-
-  text("If you see the person you were playing\nwith, click on their name.", 683, 30);
-
-  for(var i = 0; i < brokenGames.length; i ++) {
-    var tLets = brokenGames[i].tName.split('');
-    push();
-    for(var j = 0; j < tLets.length; j++) {
-      var tJX = brokenGames[i].x + j * 60;
-      var tY = brokenGames[i].y;
-      rectMode(CENTER, CENTER);
-      fill(230, 255, 215);
-      strokeWeight(2);
-      stroke(50, 80, 0);
-      rect(tJX, tY, 60, 80, 10);
-      textAlign(CENTER, CENTER);
-      fill(50, 80, 0);
-      noStroke();
-      textSize(48);
-      text(tLets[j].toUpperCase(), tJX, tY);
-    }
-    pop();
-  }
-}
-}
-
-function showWaiters(data) {
-  background(0, 0, 0, 150);
-  noStroke();
-  fill(230, 255, 215);
-
-  textAlign(CENTER, CENTER);
-  textSize(40);
-
-  if(waiters.length > 0) {
-
-  text("Here are the people currently waiting!\nIf you see your friend, click on their name.", 683, 30);
-
-  for(var i = 0; i < waiters.length; i ++) {
-    var tLets = waiters[i].letters;
-    push();
-    for(var j = 0; j < tLets.length; j++) {
-      var tJX = waiters[i].x + j * 60;
-      var tY = waiters[i].y;
-      rectMode(CENTER, CENTER);
-      fill(230, 255, 215);
-      strokeWeight(2);
-      stroke(50, 80, 0);
-      rect(tJX, tY, 60, 80, 10);
-      textAlign(CENTER, CENTER);
-      fill(50, 80, 0);
-      noStroke();
-      textSize(48);
-      text(tLets[j].toUpperCase(), tJX, tY);
-    }
-    pop();
-  }
-} else {
-  textSize(60);
-  text("Hrmm... looks like you're the only\none waiting right now, but your\nfriend will show up here\nwhen they log on.", 683, 150);
-}
-
-}
-
-
-function reVestibule() {
-  background(0, 0, 0, 150);
-
-  fill(230, 255, 215);
-  strokeWeight(2);
-  stroke(50, 80, 0);
-
-  textSize(48);
-
-  push();
-
-  textAlign(CENTER, CENTER);
-  text("Hrmm... something seems to have gone wrong...\nclick below to make another selection.", 683, 64);
-
-
-  strokeWeight(3);
-  stroke(50, 80, 0);
-  fill(180, 205, 165);
-  rect(300, 234, 300, 200, 10);
-  rect(766, 234, 300, 200, 10);
-  noFill();
-  strokeWeight(2);
-  stroke(110, 150, 0);
-
-  line(305, 247, 305, 347);
-  line(313, 239, 423, 239);
-  arc(313, 247, 16, 16, PI, PI + HALF_PI);
-  line(771, 247, 771, 347);
-  line(779, 239, 889, 239);
-  arc(779, 247, 16, 16, PI, PI + HALF_PI);
-
-  strokeWeight(3);
-  stroke(50, 80, 0);
-  fill(180, 205, 165);
-  rect(300, 484, 300, 200, 10);
-  rect(766, 484, 300, 200, 10);
-  noFill();
-  strokeWeight(2);
-  stroke(110, 150, 0);
-
-  line(305, 497, 305, 597);
-  line(313, 489, 423, 489);
-  arc(313, 497, 16, 16, PI, PI + HALF_PI);
-  line(771, 497, 771, 597);
-  line(779, 489, 889, 489);
-  arc(779, 497, 16, 16, PI, PI + HALF_PI);
-
-
-  textAlign(CENTER, CENTER);
-
-    textSize(54);
-    fill(50, 80, 0);
-    noStroke();
-    text("RANDOM\nMATCH", 450, 290);
-    textSize(60);
-    text("PLAY A\nFRIEND", 916, 290);
-
-    text("REJOIN\nA GAME", 450, 540);
-    textSize(60);
-    text("HOW TO\nPLAY", 916, 540);
-
-
-  pop();
-
-  pop();
-}
-
-function vestibule() {
-  background(0, 0, 0, 150);
-
-  fill(230, 255, 215);
-  strokeWeight(2);
-  stroke(50, 80, 0);
-
-  textSize(84);
-
-  push();
-
-  textAlign(CENTER, CENTER);
-  text("QUARANTINAGRAMS!!", 683, 64);
-  textSize(36);
-  text("HI, " + username.toUpperCase() + "! WHAT WOULD YOU LIKE TO DO?", 683, 174);
-
-  strokeWeight(3);
-  stroke(50, 80, 0);
-  fill(180, 205, 165);
-  rect(300, 234, 300, 200, 10);
-  rect(766, 234, 300, 200, 10);
-  noFill();
-  strokeWeight(2);
-  stroke(110, 150, 0);
-
-  line(305, 247, 305, 347);
-  line(313, 239, 423, 239);
-  arc(313, 247, 16, 16, PI, PI + HALF_PI);
-  line(771, 247, 771, 347);
-  line(779, 239, 889, 239);
-  arc(779, 247, 16, 16, PI, PI + HALF_PI);
-
-  strokeWeight(3);
-  stroke(50, 80, 0);
-  fill(180, 205, 165);
-  rect(300, 484, 300, 200, 10);
-  rect(766, 484, 300, 200, 10);
-  noFill();
-  strokeWeight(2);
-  stroke(110, 150, 0);
-
-  line(305, 497, 305, 597);
-  line(313, 489, 423, 489);
-  arc(313, 497, 16, 16, PI, PI + HALF_PI);
-  line(771, 497, 771, 597);
-  line(779, 489, 889, 489);
-  arc(779, 497, 16, 16, PI, PI + HALF_PI);
-
-
-  textAlign(CENTER, CENTER);
-
-    textSize(54);
-    fill(50, 80, 0);
-    noStroke();
-    text("RANDOM\nMATCH", 450, 290);
-    textSize(60);
-    text("PLAY A\nFRIEND", 916, 290);
-
-    text("REJOIN\nA GAME", 450, 540);
-    textSize(60);
-    text("HOW TO\nPLAY", 916, 540);
-
-
-  pop();
-
-  pop();
-}
-
 function showButtons() {
   var showButt = true;
 
-  if (gameState <= 1 || gameState == 3 || gameState >= 4 || turnState == 3) {
+  if (gameState <= 1 || gameState >= 4 || turnState == 3 || transState) {
     showButt = false;
   }
 
-  // if (turnState == 2 && actState == false) {
-  //   showButt = false;
-  // }
+  if (turnState == 2 && actState == false) {
+    showButt = false;
+  }
 
   if(showButt) {
   push();
@@ -970,9 +391,18 @@ function showButtons() {
 
   textAlign(CENTER, CENTER);
 
+  if(gameState == 0) {
+    textSize(24);
+    fill(50, 80, 0);
+    noStroke();
+    text("HOW TO\nPLAY", 75, 43);
+    textSize(28);
+    text("START\nGAME", 1291, 43);
+  }
+
   if(turnState == 1) {
 
-  if(actState && !transState) {
+  if(actState) {
     strokeWeight(3);
     stroke(50, 80, 0);
     fill(230, 255, 215);
@@ -995,57 +425,20 @@ function showButtons() {
     textSize(28);
     text("CHECK\nWORD", 1291, 43);
     textSize(60);
-    if(actState && !transState) {
+    if(actState) {
     text("DRAW A TILE", 683, 60);
-
-  } else if (!actState && !transState) {
-    text(opName.toUpperCase() + "\'S TURN TO DRAW", 683, 60);
-    }
-
-    var greyOut = false;
-
-    if((comTiles.length < 1 && (p1words.length + p2words.length < 2)) || ((p1words.length + p2words.length < 1) && comTiles.length < 3)) {
-      greyOut = true;
-    }
-
-    if(transState || greyOut) {
-      fill(180, 205, 165, 128);
-      rect(10, 10, 130, 100, 10);
-    }
-    if (transState || p1words.length < 1 || p2words.length < 1) {
-      fill(180, 205, 165, 128);
-      rect(1226, 10, 130, 100, 10);
-    }
+  } else {
+    text("PLAYER " + opn + " IS DRAWING", 683, 60);
+  }
   }
 
   if(turnState == 2) {
-    if (actState) {
     textSize(30);
     fill(50, 80, 0);
     noStroke();
     text("TAKE\nWORD", 75, 43);
     textSize(26);
     text("CANCEL\nWORD", 1291, 43);
-  } else {
-    textSize(30);
-    fill(50, 80, 0);
-    noStroke();
-    text("MAKE\nWORD", 75, 43);
-    textSize(26);
-    text("CHECK\nWORD", 1291, 43);
-    fill(180, 205, 165, 128);
-    rect(10, 10, 130, 100, 10);
-    rect(1226, 10, 130, 100, 10);
-    }
-  }
-
-  if(turnState == 5) {
-    textSize(30);
-    fill(50, 80, 0);
-    noStroke();
-    text("MAKE\nWORD", 75, 43);
-    textSize(26);
-    text("CHECK\nWORD", 1291, 43);
   }
   pop();
 }
@@ -1137,17 +530,13 @@ function endSeq() {
   push();
   translate(683, 64);
   textAlign(CENTER, CENTER);
-  if (pn == 1) {
-  text(username.toUpperCase() + ": " + p1tot + " " + opName.toUpperCase() + ": " + p2tot, 0, 0);
-} else if (pn == 2) {
-  text(opName.toUpperCase() + ": " + p1tot + " " + username.toUpperCase() + ": " + p2tot, 0, 0);
-  }
+  text("Player 1: " + p1tot + " Player 2: " + p2tot, 0, 0);
   translate(0, 300);
   textSize(84);
   if ((p1tot > p2tot && pn == 1) || (p2tot>p1tot && pn == 2)) {
-    text("YOU WIN!!", 0, 0);
+    text("You win!!", 0, 0);
   } else {
-    text(opName.toUpperCase() + " WINS!", 0, 0);
+    text("Player " + opn + " wins. Better luck next time!", 0, 0);
   }
   pop();
 
@@ -1161,9 +550,9 @@ if(pn == 1) {
   fill(230, 255, 215);
   noStroke();
   textSize(24);
-  text ("YOUR WORDS:", 20, 155);
+  text ("Your Words:", 20, 155);
   textAlign(RIGHT);
-  text (opName.toUpperCase() + "'S WORDS:", 1346, 155);
+  text ("Player 2's Words:", 1346, 155);
   pop();
 } else {
 
@@ -1172,9 +561,9 @@ if(pn == 1) {
     fill(230, 255, 215);
     noStroke();
     textSize(24);
-    text (opName.toUpperCase() + "'S WORDS:", 20, 155);
+    text ("Player 1's Words:", 20, 155);
     textAlign(RIGHT);
-    text ("YOUR WORDS:", 1346, 155);
+    text ("Your Words:", 1346, 155);
     pop();
 
 }
@@ -1191,7 +580,7 @@ function passSeq() {
     push();
     translate(683, 32);
     textAlign(CENTER, CENTER);
-    text("No more tiles!\nClick here when you're ready to add up the scores", 0, 0);
+    text("No more tiles!\nPress \"P\" when you're ready to add up the scores", 0, 0);
     pop();
   } else {
     fill(230, 255, 215);
@@ -1203,7 +592,7 @@ function passSeq() {
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
-    text("Waiting on " + opName + " to end the game", 0, 0);
+    text("Waiting on player " + opn + " to end the game", 0, 0);
     pop();
   }
 }
@@ -1219,7 +608,7 @@ function penaltyAnim() {
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
-    text("Go ahead and take a word from " + opName, 0, 0);
+    text("Go ahead and take a word from Player " + opn, 0, 0);
     pop();
   } else {
     fill(230, 255, 215);
@@ -1231,7 +620,7 @@ function penaltyAnim() {
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
-    text(opName + " gets to take one of your words", 0, 0);
+    text("Player " + opn + " gets to take one of your words", 0, 0);
     pop();
   }
 }
@@ -1268,7 +657,7 @@ function challengeAnim() {
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
-    text(opName + " is challenging one of your words!", 0, 0);
+    text("Player " + opn + " is challenging one of your words!", 0, 0);
     pop();
   }
 }
@@ -1425,55 +814,30 @@ function makingWords() {
 }
 
 function direxAnim() {
-if (notEnuff) {
-  fadeTime2 = transTime;
-  if (fadeTime2 - fadeTime < 120) {
+  fill(230, 255, 215);
+  strokeWeight(2);
+  stroke(50, 80, 0);
+
+  textSize(36);
+
+  push();
+//   translate(20, 154);
+//   textAlign(LEFT, CENTER);
+//   if (actState) {
+//   text("Press enter when done", 0, 0);
+// } else {
+//   text("Player " + opn + " is making a word", 0, 0);
+// }
+  pop();
+  if (notEnuff) {
     push();
-    strokeWeight(2);
-    stroke(230, 255, 215);
-    fill(50, 80, 0);
+    translate(683, 300);
+    fill(230, 255, 215);
     textSize(60);
     textAlign(CENTER, CENTER);
-    text("You must combine more\nthan one element to\nmake a new word", 683, 300);
+    text("You must combine more\nthan one element to\nmake a new word", 0, 0);
     pop();
-   }
   }
-}
-
-function shortAnim() {
-
-  fadeTime2 = transTime;
-  if (fadeTime2 - fadeTime < 120) {
-    push();
-    strokeWeight(2);
-    stroke(230, 255, 215);
-    fill(50, 80, 0);
-    textSize(60);
-    textAlign(CENTER, CENTER);
-    text("Your word must contain\nthree or more letters.", 683, 300);
-    pop();
-  } else {
-    tooShort = false;
-  }
-
-}
-
-function rootAnim() {
-
-  fadeTime2 = transTime;
-  if (fadeTime2 - fadeTime < 120) {
-    push();
-    strokeWeight(2);
-    stroke(230, 255, 215);
-    fill(50, 80, 0);
-    textSize(60);
-    textAlign(CENTER, CENTER);
-    text("You must change the root\nto make a new word!", 683, 300);
-    pop();
-  } else {
-    oldRoot = false;
-  }
-
 }
 
 function dragAnim(){
@@ -1489,15 +853,15 @@ function dragAnim(){
     strokeWeight(2);
     stroke(50, 80, 0);
 
-    textSize(48);
+    textSize(64);
 
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
     if (actState) {
-    text("DRAG TILES HERE TO MAKE A WORD", 0, 0);
+    text("Drag tiles here to make words", 0, 0);
   } else {
-    text(opName.toUpperCase() + " IS MAKING A WORD", 0, 0);
+    text("Player " + opn + " is making a word", 0, 0);
   }
     pop();
   }
@@ -1774,52 +1138,6 @@ function setTheTable() {
 
 }
 
-function askUser() {
-
-background(0, 0, 0, 150);
-
-fill(230, 255, 215);
-strokeWeight(2);
-stroke(50, 80, 0);
-
-textSize(54);
-
-push();
-
-textAlign(CENTER, CENTER);
-text(propUser.friendly.toUpperCase() + " SELECTED YOU!\nIS THIS THE PERSON\nYOU'D LIKE TO PLAY WITH?", 683, 50);
-// translate(0, 140);
-// textSize(36);
-// text("Press X to get started!", 0, 0);
-
-strokeWeight(3);
-stroke(50, 80, 0);
-fill(180, 205, 165);
-rect(300, 284, 300, 200, 10);
-rect(766, 284, 300, 200, 10);
-noFill();
-strokeWeight(2);
-stroke(110, 150, 0);
-line(305, 297, 305, 397);
-line(313, 289, 423, 289);
-arc(313, 297, 16, 16, PI, PI + HALF_PI);
-line(771, 297, 771, 397);
-line(779, 289, 889, 289);
-arc(779, 297, 16, 16, PI, PI + HALF_PI);
-
-
-textAlign(CENTER, CENTER);
-
-  textSize(84);
-  fill(50, 80, 0);
-  noStroke();
-  text("YES", 450, 380);
-  text("NO", 916, 380);
-
-pop();
-
-}
-
 function opSeq() {
 
 background(0, 0, 0, 100);
@@ -1891,50 +1209,16 @@ pop();
 
 }
 
-function sendMakeWord() {
-  var gTg = true;
-
-  if (blockTiles.length < 3) {
-    gTg = false;
-    fadeTime = transTime;
-    tooShort = true;
-  }
-
-  if (initWords.length > 0) {
-  var possWord;
-  var possWordLets = [];
-
-  for (var i = 0; i < blockTiles.length; i++) {
-    possWordLets.push(blockTiles[i].letter);
-  }
-
-  possWord = possWordLets.join('');
-
-  for (var i = 0; i < initWords.length; i++){
-      for (var j = 0; j < prefixes.length; j ++) {
-        var testWord = prefixes[j].concat(initWords[i]);
-        if (possWord.match(testWord) != null) {
-          gTg = false;
-          fadeTime = transTime;
-          oldRoot = true;
-          break;
-        }
-      }
-      for (var j = 0; j < suffixes.length; j ++) {
-        var testWord = initWords[i].concat(suffixes[j]);
-        if (possWord.match(testWord) != null) {
-          gTg = false;
-          fadeTime = transTime;
-          oldRoot = true;
-          break;
-        }
-      }
-    }
-  }
-
-  if (gTg) {
-    socket.emit('sendWord', "x");
-  }
+function tooMany() {
+    background(0, 0, 0, 100);
+    fill(230, 255, 215);
+    textSize(72);
+    textAlign(CENTER, CENTER);
+    text("The Room is Full...", 683, 65);
+    textSize(60);
+    textAlign(LEFT);
+    text("Sadly there are too many people\ncurrently playing Quarantinagrams!\nPlease come back soon\nand play again!", 160, 280);
+    console.log("Kilroy was here");
 }
 
 function buttonStuff() {
@@ -1974,17 +1258,6 @@ function buttonStuff() {
     }
   }
 
-  if (gameState == 12 || gameState == 18) {
-    if (mouseX2 > 300 && mouseX2 < 600 && mouseY2 > 234 && mouseY2 < 434) {socket.emit('matchMe', username);}
-    if (mouseX2 > 766 && mouseX2 < 1066 && mouseY2 > 234 && mouseY2 < 434) {
-      socket.emit('findMe', username);
-    }
-    if (mouseX2 > 300 && mouseX2 < 600 && mouseY2 > 484 && mouseY2 < 684) {socket.emit('hiAgain', username);}
-    if (mouseX2 > 766 && mouseX2 < 1066 && mouseY2 > 484 && mouseY2 < 684) {
-      gameState = 4; //here is where you stop!!
-    }
-  }
-
   if (turnState == 1 && actState) {
     if (b3 && !transState) {
       transState = true;
@@ -1992,27 +1265,13 @@ function buttonStuff() {
     }
   }
 
-  if (turnState == 1 || turnState == 5) {
-
-      var noMake = false;
-      if((comTiles.length < 1 && (p1words.length + p2words.length < 2)) || ((p1words.length + p2words.length < 1) && comTiles.length < 3)) {
-        noMake = true;
-      }
-
-      if(!transState && !noMake) {
-        if (b1) {socket.emit('makingWord', pn);}
-      }
-      if (!transState && p1words.length >= 1 && p2words.length >= 1) {
-          if(b2) {socket.emit('challengeWord', pn);}
-      }
-  }
-
-  if (turnState == 5) {
-    if (b3) {socket.emit('imDone', "x");}
+  if (turnState == 1) {
+    if (b1) {socket.emit('makingWord', pn);}
+      if(b2) {socket.emit('challengeWord', pn);}
   }
 
   if (turnState == 2 && actState) {
-    if(b1) {sendMakeWord();}
+    if(b1) {socket.emit('sendWord', "x");}
     if(b2) {socket.emit('putEmBack', pn);}
   }
 
@@ -2022,57 +1281,6 @@ function buttonStuff() {
       socket.emit('noChallenge', "x");
     }
   }
-
-  if (gameState == 15) {
-    for (var i = 0; i < waiters.length; i++) {
-      var tX1 = waiters[i].x - 30;
-      var tX2 = waiters[i].x + 30 + (waiters[i].letters.length * 30);
-      var tY1 = waiters[i].y - 40;
-      var tY2 = waiters[i].y + 40;
-
-      if (mouseX2 > tX1 && mouseX2 < tX2 && mouseY2 > tY1 && mouseY2 < tY2) {
-        gameState = 16;
-        socket.emit('connectMe', waiters[i].name);
-      }
-    }
-  }
-
-  if (gameState == 21) {
-    for (var i = 0; i < brokenGames.length; i++) {
-      var tX1 = brokenGames[i].x - 30;
-      var tX2 = brokenGames[i].x + 30 + (brokenGames[i].tName.length * 30);
-      var tY1 = brokenGames[i].y - 40;
-      var tY2 = brokenGames[i].y + 40;
-
-      if (mouseX2 > tX1 && mouseX2 < tX2 && mouseY2 > tY1 && mouseY2 < tY2) {
-        var repairPkg = {
-          rN: brokenGames[i].roomName,
-          uN: username
-        }
-        socket.emit('repairGame', repairPkg);
-      }
-    }
-  }
-
-  if (gameState == 17) {
-    if (mouseX2 > 300 && mouseX2 < 600 && mouseY2 > 284 && mouseY2 < 484) {
-      var gamePkg = {
-        p1id: propUser.name,
-        p1friendly: propUser.friendly,
-        p2id: socketID,
-        p2friendly: username
-      }
-      console.log('sending good to go')
-      socket.emit('goodToGo', gamePkg);
-    }
-
-    if (mouseX2 > 766 && mouseX2 < 1066 && mouseY2 > 284 && mouseY2 < 484) {
-      gameState = 15;
-      socket.emit('notQuite', propUser);
-    }
-
-  }
-
 }
 
 function howToPlay() {
@@ -2145,7 +1353,6 @@ function LetterTile(letter, points, x, y, id){
 }
 
 function mousePressed() {
-  if(!broken) {
   buttonStuff();
 
   if  (turnState == 2 && actState && !transState) {
@@ -2165,10 +1372,9 @@ function mousePressed() {
      }
 
      if (pageState >= 6) {
-       gameState = 12;
+       gameState = 0;
        pageState = 0;
      }
-   }
 return false;
 }
 
@@ -2198,38 +1404,15 @@ function sendHi() {
   socket.emit('hiThere', "x");
 }
 
-function sendName() {
-  socket.emit('signup', username);
-}
-
-function writeName() {
-  username = usernameLetters.join('');
-  //username = username.toUpperCase();
-}
-
-function keyPressed() {
-  if (gameState == 11 || gameState == 20) {
-    if (keyCode == BACKSPACE) {
-      usernameLetters.pop();
-      writeName();
-    }
-  }
-}
-
 function keyTyped() {
 
   console.log("actState: " + actState);
   console.log("turnState: " + turnState);
 
-  if(gameState == 11 || gameState == 20) {
-    if (keyCode == ENTER) {
-      sendName();
-    } else {
-      usernameLetters.push(key);
-      writeName();
-    }
-  }
-
+if (key == "x" && gameState == 0) {
+  sendHi();
+  gameState = 1;
+}
 
 if (keyCode == ENTER && actState == true && turnState == 1) {
   transState = true;
@@ -2254,7 +1437,7 @@ if (key == "c" && turnState == 3 && actState){
 }
 
 if (keyCode == ENTER && actState == true && turnState == 2 && blockTiles.length > 2) {
-  sendMakeWord(); // leaving here 5/2
+  socket.emit('sendWord', "x"); // leaving here 5/2
 }
 
 if (key == " " && (turnState == 1 || turnState == 5)) {

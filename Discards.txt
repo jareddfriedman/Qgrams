@@ -71,3 +71,37 @@ CLiENT OLD MOUSE RELKEASED
       break;
     }
   }
+
+Overly-complicated FindMe for server:
+
+  socket.on('fiXXndMe',
+  function(data) {
+    if (gameRooms.length === 0) {
+      var newName = nameGen();
+      gameRooms.push (new GameRoom(newName, socket.id, data));
+      gameRooms[0].open = false;
+      getStarted(gameRooms[0]);
+      socket.join(gameRooms[0].roomName);
+      socket.emit('waitHereFriend', "x");
+    } else {
+      console.log('recognize somebody here');
+      var waiters = [];
+      for (var i = 0; i < gameRooms.length; i++) {
+        if(gameRooms[i].p2 === 0 && !gameRooms[i].open) {
+          waiters.push(gameRooms[i]);
+          console.log('pushing waiter');
+        }
+      }
+      if (waiters.length === 0) {
+        var newName = nameGen();
+        gameRooms.push (new GameRoom(newName, socket.id, data));
+        gameRooms[0].open = false;
+        getStarted(gameRooms[0]);
+        socket.join(gameRooms[0].roomName);
+        socket.emit('waitHereFriend', "x");
+      } else {
+        socket.emit('weWait', waiters);
+      }
+    }
+  }
+);
