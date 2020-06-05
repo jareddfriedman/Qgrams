@@ -77,6 +77,8 @@ var brokenGames = [];
 //
 // console.log(masterList.length);
 
+//setInterval(saveLists, 60000);
+
 function listen() {
   var host = server.address().address;
   var port = server.address().port;
@@ -172,11 +174,20 @@ io.sockets.on('connection',
   socket.on('findMe',
   function(data) {
     socket.join('waitingRoom');
+
+    var q = false;
+    for (var i = 0; i < waiters.length; i++) {
+      if (waiters[i].name == socket.id) {
+        q = true;
+      }
+    }
+    if (!q) {
     var waiter = {
       name: socket.id.toString(),
       friendly: data
     }
     waiters.push(waiter);
+    }
     io.in('waitingRoom').emit('weWait', waiters);
   }
 );
@@ -190,6 +201,7 @@ function(data) {
       waiters[i].waiting = data;
     }
   }
+  socket.leave('waitingRoom');
   io.to(data).emit('thisGuy', tUser);
 }
 );
@@ -204,12 +216,19 @@ function(data) {
     gameRooms[gRL].p2 = data.p2id;
     gameRooms[gRL].p2friendly = data.p2friendly;
     gameRooms[gRL].open = false;
+
+    var tempWaiters = [];
+
     for (var i = 0; i < waiters.length; i++) {
-      if (waiters[i].name == gameRooms[gRL].p1 || waiters[i].name == gameRooms[gRL].p2) {
-        waiters.splice(i, 1);
-        io.in('waitingRoom').emit('weWait', waiters);
+      if (waiters[i].name != gameRooms[gRL].p1 && waiters[i].name != gameRooms[gRL].p2) {
+        tempWaiters.push(waiters[i]);
       }
     }
+
+    waiters = tempWaiters;
+
+    io.in('waitingRoom').emit('weWait', waiters);
+
     getStarted(gameRooms[gRL]);
     io.to(gameRooms[gRL].p1).emit('joinMe', gameRooms[gRL]);
   }
@@ -218,12 +237,16 @@ function(data) {
 socket.on('joined',
 function(data) {
   socket.join(data.roomName);
-  for (var i = 0; i < waiters.length; i++) {
-    if (waiters[i].name == socket.id|| waiters[i].name == socket.id) {
-      waiters.splice(i, 1);
-      io.in('waitingRoom').emit('weWait', waiters);
-    }
-  }
+  // var tI;
+  // for (var i = 0; i < waiters.length; i++) {
+  //   if (waiters[i].name == socket.id|| waiters[i].name == socket.id) {
+  //     tI = i;
+  //   }
+  // }
+  // if(tI !== undefined) {
+  // waiters.splice(tI, 1);
+  // io.in('waitingRoom').emit('weWait', waiters);
+  // }
   socket.leave('waitingRoom');
     kickOffGame(data);
     //io.to(gameRooms[gRL].roomName).emit('afoot', gameRooms[gRL]);
