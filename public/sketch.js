@@ -16,7 +16,11 @@ var initState = true; // moves text based on whether game is in progress
 
 var animTime = 0;
 
+var tilesLeft = 180;
+
 var blockTiles = [];
+
+var specTiles = [];
 
 var pn = 0;
 var opn = 0;
@@ -69,9 +73,23 @@ var oldRoot = false;
 
 var initWords = [];
 
+var thisPick = 0;
+
 var prefixes = ["un", "in", "pre", "non", "re", "de", "dis"];
 
-var suffixes = ["s", "es", "ed", "er", "ers", "ing", "ly", "ship", "ish", "ous", "ist", "est", "y", "iest", "ier"];
+var suffixes = ["s", "es", "ed", "er", "ers", "ing", "ly", "ship", "ish", "ous", "ist", "est", "y", "iest", "ier", "d", "r"];
+
+var suff2 = ["ed", "er", "ers", "ing", "y", "ier", "iest", "est"];
+
+var exceptions = ["badger", "lady", "winy", "wind", "piny", "spiny"];
+
+var bSWord;
+
+var bSPoints = 0;
+
+var endState = false;
+
+var passState = false;
 
 function preload() {
   regFont = loadFont('Museo_Slab_500_2.otf');
@@ -80,6 +98,8 @@ function preload() {
 
 function setup() {
   createCanvas(1366, 750);
+
+  frameRate(30);
 
   socket = io.connect('http://167.172.149.111:3000');
 
@@ -112,9 +132,14 @@ function setup() {
     });
 
     socket.on('turnBack',
-    function() {
+    function(data) {
       console.log("turning back");
       turnState = 1;
+      if (data == pn) {
+        actState = true;
+      } else {
+        actState = false;
+      }
     });
 
   socket.on('readyp1', // here's a new tile
@@ -195,10 +220,18 @@ function setup() {
 
   socket.on('hereTile',
     function(data) {
-      console.log(data)
+      fadeTime = transTime - 1000;
+
+      //console.log(data)
       //fadeTime = transTime;
-      comTiles = data;
-      actState = !actState;
+      comTiles = data.tiles;
+      if (data.aS == pn) {
+        actState = true;
+      } else {
+        actState = false;
+      }
+      //actState = !actState;
+      turnState = 1;
       initState = false;
     });
 
@@ -239,7 +272,15 @@ function setup() {
     socket.on('noMoreTiles',
     function() {
       actState = true;
+      endState = true;
       turnState = 5;
+    });
+
+    socket.on('tilePicked',
+    function(data) {
+      tilesLeft--;
+      thisPick = data;
+      fadeTime = transTime;
     });
 
     socket.on('newTrans',
@@ -281,9 +322,31 @@ function setup() {
         comTiles = [];
       }
       blockTiles = [];
+      if (!endState) {
       turnState = 1;
+    } else {
+      turnState = 5;
+    }
       transState = false;
-      actState = !actState;
+      if (data.aS == pn) {
+        actState = true;
+      } else {
+        actState = false;
+      }
+    });
+
+    socket.on('pickATile',
+    function(data) {
+      if (data.picker == pn) {
+        actState = true;
+      } else {
+        actState = false;
+      }
+
+      turnState = 6;
+
+      specTiles = data.tiles;
+
     });
 
     socket.on('okChallenge',
@@ -320,6 +383,11 @@ function setup() {
     function(data) {
       p1tot = data.p1;
       p2tot = data.p2;
+      bSWord = data.bS;
+      bSPoints = data.bSP;
+      longWord = data.lW;
+      bestWord = data.bWW;
+      bestPoints = data.bWP;
       gameState = 3;
     });
 
@@ -389,6 +457,11 @@ function setup() {
       gameState = 20;
     });
 
+    socket.on('servErr',
+    function() {
+      gameState = 22;
+    });
+
     socket.on('hereBroken',
     function(data) {
       console.log(data);
@@ -433,8 +506,8 @@ function setup() {
 function draw() {
   var wW = windowWidth;
   var wH = windowHeight;
-  var wWR = wW/1366;
-  var wHR = wH/750;
+  var wWR = (wW/1366) * 0.98;
+  var wHR = (wH/750) * 0.98;
 
   push();
 
@@ -534,6 +607,10 @@ function draw() {
     showBG();
   }
 
+  if (gameState == 22) {
+    servErrScreen();
+  }
+
   if(broken) {
     brokenScreen();
   }
@@ -574,6 +651,10 @@ function runGame() {
   }
 
   idAnim();
+
+  if (turnState == 6) {
+    pickScreen();
+  }
 }
 
 function brokenScreen() {
@@ -593,14 +674,101 @@ function brokenScreen() {
   pop();
 }
 
+function servErrScreen() {
+  background(0, 0, 0, 150);
+
+  push();
+  fill(230, 255, 215);
+  strokeWeight(2);
+  stroke(50, 80, 0);
+
+  textSize(60);
+
+
+
+  textAlign(CENTER, CENTER);
+  text("HRMM... SEEMS LIKE SOMETHING WENT WRONG...\nREFRESH YOUR BROWSER, ENTER THE SAME\nUSERNAME AND CHOOSE \"REJOIN A GAME\"\nTO GET BACK TO YOUR GAME", 683, 174);
+  pop();
+}
+
+
+function pickScreen() {
+  var tT;
+  var tB = false;
+
+  var fadeTime3 = transTime;
+
+  background(0, 0, 0, 150);
+  noStroke();
+  fill(230, 255, 215);
+  textAlign(CENTER);
+  textSize(60);
+  if(actState) {
+  text('PICK A TILE! ANY TILE!', 683, 75);
+} else {
+  text(opName.toUpperCase() + ' IS PICKING', 683, 75);
+}
+
+  for (var i = 0; i < specTiles.length; i++) {
+    if (specTiles[i].disp) {
+      textSize(24);
+      strokeWeight(2);
+      stroke(50, 80, 0);
+      fill(230, 255, 215);
+      rectMode(CENTER);
+      var tX = specTiles[i].x;
+      var tY = specTiles[i].y;
+      rect(tX, tY, 30, 40, 5);
+      // noStroke();
+      // fill(50, 80, 0);
+      // textAlign(CENTER, CENTER);
+      // textFont(tileFont);
+      // var tL = blockTiles[i].letter.toUpperCase();
+      // text(tL, tX, tY);
+      // textSize(14);
+      // text(blockTiles[i].points, tX + 10, tY + 14);
+    }
+  }
+
+  for (var i = 0; i < specTiles.length; i++) {
+  if (specTiles[i].id == thisPick) {
+  if(fadeTime3 - fadeTime < 120) {
+
+  textSize(144);
+  strokeWeight(5);
+  stroke(50, 80, 0);
+  fill(230, 255, 215);
+  rectMode(CENTER);
+  rect(specTiles[i].x, specTiles[i].y, 180, 240, 20);
+  if (fadeTime3 - fadeTime < 60) {
+    var fader = fadeTime3 - fadeTime;
+    var fillMap = map(fader, 0, 60, 255, 0)
+    fill(0, 0, 0, fillMap);
+    rectMode(CENTER);
+    rect(specTiles[i].x, specTiles[i].y, 180, 240, 20);
+    } else {
+    push();
+    textAlign(CENTER, CENTER);
+    fill(50, 80, 0);
+    noStroke();
+    text(specTiles[i].letter.toUpperCase(), specTiles[i].x, specTiles[i].y);
+    textSize(24);
+    //text(specTiles[i].points, 713, 460);
+    pop();
+    }
+  }
+ }
+}
+}
+
 function introducePlayers() {
   var fadeTime2 = transTime - fadeTime;
-  if (fadeTime2 >= 180) {
+  if (fadeTime2 >= 45) {
     transState = false;
     gameState = 2;
   }
 
-  var fadeBk = map(fadeTime2, 0, 180, 150, 0);
+  var fadeBk = map(fadeTime2, 0, 45, 150, 0);
   background(0, 0, 0, fadeBk);
 
   push();
@@ -625,7 +793,7 @@ function enterName() {
   textAlign(CENTER, CENTER);
   textSize(48);
 
-  text("Type your name and press \"enter\".", 683, 65);
+  text("TYPE YOUR NAME AND PRESS \"ENTER\".", 683, 65);
   textSize(90);
   text(username.toUpperCase(), 683, 360);
 }
@@ -638,7 +806,7 @@ function noNameVest() {
   textAlign(CENTER, CENTER);
   textSize(48);
 
-  text("It doesn't look like there are any games\nmissing a player by that name...\nRe-enter your name here!", 683, 65);
+  text("It doesn't look like there are any games\nmissing a player by that name...\nRe-enter your name here or click\nanywhere to return to the lobby.", 683, 65);
   textSize(90);
   text(username.toUpperCase(), 683, 360);
 }
@@ -738,7 +906,7 @@ function showBG() {
 
   if(brokenGames.length > 0) {
 
-  text("If you see the person you were playing\nwith, click on their name.", 683, 30);
+  text("If you see the person you were playing\nwith, click on their name, or click\nanywhere to return to the lobby.", 683, 30);
 
   for(var i = 0; i < brokenGames.length; i ++) {
     var tLets = brokenGames[i].tName.split('');
@@ -772,7 +940,7 @@ function showWaiters(data) {
 
   if(waiters.length > 0) {
 
-  text("Here are the people currently waiting!\nIf you see your friend, click on their name.", 683, 30);
+  text("Here are the people currently waiting!\nIf you see your friend, click on their name,\nor click anywhere else to return to\nthe lobby.", 683, 30);
 
   for(var i = 0; i < waiters.length; i ++) {
     var tLets = waiters[i].letters;
@@ -795,7 +963,7 @@ function showWaiters(data) {
   }
 } else {
   textSize(60);
-  text("Hrmm... looks like you're the only\none waiting right now, but your\nfriend will show up here\nwhen they log on.", 683, 150);
+  text("Hrmm... looks like you're the only\none waiting right now, but your\nfriend will show up here\nwhen they log on.\n\nIf you want to return to the lobby,\nclick anywhere.", 683, 150);
 }
 
 }
@@ -939,7 +1107,7 @@ function vestibule() {
 function showButtons() {
   var showButt = true;
 
-  if (gameState <= 1 || gameState == 3 || gameState >= 4 || turnState == 3) {
+  if (gameState <= 1 || gameState == 3 || gameState >= 4 || turnState == 3 || turnState == 4) {
     showButt = false;
   }
 
@@ -996,7 +1164,7 @@ function showButtons() {
     text("CHECK\nWORD", 1291, 43);
     textSize(60);
     if(actState && !transState) {
-    text("DRAW A TILE", 683, 60);
+    text("PICK A NEW TILE", 683, 60);
 
   } else if (!actState && !transState) {
     text(opName.toUpperCase() + "\'S TURN TO DRAW", 683, 60);
@@ -1149,6 +1317,11 @@ function endSeq() {
   } else {
     text(opName.toUpperCase() + " WINS!", 0, 0);
   }
+  textSize(64);
+  text("LONGEST WORD: " + longWord.toUpperCase(), 0, 100);
+  textSize(48);
+  text("BEST WORD: " + bestWord.toUpperCase() + " FOR " + bestPoints + " POINTS!", 0, 160);
+  text("BEST STEAL: " + bSWord.toUpperCase() + " FOR " + bSPoints + " POINTS!", 0, 220);
   pop();
 
 }
@@ -1178,10 +1351,16 @@ if(pn == 1) {
     pop();
 
 }
+
+textSize(24);
+noStroke();
+fill(230, 255, 215);
+textAlign(LEFT);
+text("TILES REMAINING: " + tilesLeft, 20, 735);
 }
 
 function passSeq() {
-  if (actState) {
+  if (!passState) {
     fill(230, 255, 215);
     strokeWeight(2);
     stroke(50, 80, 0);
@@ -1191,7 +1370,7 @@ function passSeq() {
     push();
     translate(683, 32);
     textAlign(CENTER, CENTER);
-    text("No more tiles!\nClick here when you're ready to add up the scores", 0, 0);
+    text("NO MORE TILES!\nCLICK HERE WHEN YOU'RE READY TO ADD UP SCORES", 0, 0);
     pop();
   } else {
     fill(230, 255, 215);
@@ -1203,7 +1382,7 @@ function passSeq() {
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
-    text("Waiting on " + opName + " to end the game", 0, 0);
+    text("WAITING ON " + opName.toUpperCase() + " TO END THE GAME", 0, 0);
     pop();
   }
 }
@@ -1214,24 +1393,24 @@ function penaltyAnim() {
     strokeWeight(2);
     stroke(50, 80, 0);
 
-    textSize(48);
+    textSize(40);
 
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
-    text("Go ahead and take a word from " + opName, 0, 0);
+    text("GO AHEAD AND TAKE A WORD FROM " + opName.toUpperCase(), 0, 0);
     pop();
   } else {
     fill(230, 255, 215);
     strokeWeight(2);
     stroke(50, 80, 0);
 
-    textSize(48);
+    textSize(40);
 
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
-    text(opName + " gets to take one of your words", 0, 0);
+    text(opName.toUpperCase() + " GETS TO TAKE ONE OF YOUR WORDS", 0, 0);
     pop();
   }
 }
@@ -1248,13 +1427,13 @@ function challengeAnim() {
     translate(683, 44);
     textAlign(CENTER, CENTER);
     if (!invul) {
-    text("Click on a word to challenge it\nor click here to return to the game", 0, 0);
+    text("CLICK ON A WORD TO CHALLENGE IT\nOR CLICK HERE TO RETURN TO THE GAME", 0, 0);
 
   } else {
     push();
     translate(0, 0);
     textSize(36);
-    text("That word has already been challenged.\nChoose a different word or press C to exit", 0, 0);
+    text("THAT WORD HAS ALREADY BEEN CHALLENGED\nCHOOSE A DIFERENT WORD OR CLICK HERE TO EXIT", 0, 0);
     pop();
   }
     pop();
@@ -1268,7 +1447,7 @@ function challengeAnim() {
     push();
     translate(683, 64);
     textAlign(CENTER, CENTER);
-    text(opName + " is challenging one of your words!", 0, 0);
+    text(opName.toUpperCase() + " IS CHALLENGING ONE OF YOUR WORDS!", 0, 0);
     pop();
   }
 }
@@ -1461,7 +1640,7 @@ function shortAnim() {
 function rootAnim() {
 
   fadeTime2 = transTime;
-  if (fadeTime2 - fadeTime < 120) {
+  if (fadeTime2 - fadeTime < 60) {
     push();
     strokeWeight(2);
     stroke(230, 255, 215);
@@ -1628,10 +1807,10 @@ function showWordTiles() {
 }
 
 function showComTiles() {
-  var fadeTime2 = transTime - fadeTime;
-  if (fadeTime2 >= 120) {
-    transState = false;
-  }
+  // var fadeTime2 = transTime - fadeTime;
+  // if (fadeTime2 >= 30) {
+  //   transState = false;
+  // }
   push();
 
     if(!transState && comTiles[0].disp) {
@@ -1685,9 +1864,9 @@ if(comTiles.length > 0) {
     var vadeG = 0;
     var fadeB = 0;
     if(fadeTime2 > 0) {
-      fadeR = floor(map(fadeTime2, 0, 120, 50, 230));
-      fadeG = floor(map(fadeTime2, 0, 120, 80, 255));
-      fadeB = floor(map(fadeTime2, 0, 120, 0, 215));
+      fadeR = floor(map(fadeTime2, 0, 30, 50, 230));
+      fadeG = floor(map(fadeTime2, 0, 30, 80, 255));
+      fadeB = floor(map(fadeTime2, 0, 30, 0, 215));
     }
     rectMode(CENTER);
     noStroke();
@@ -1912,8 +2091,10 @@ function sendMakeWord() {
 
   for (var i = 0; i < initWords.length; i++){
       for (var j = 0; j < prefixes.length; j ++) {
+        var testReg = new RegExp('^' + prefixes[j] + initWords[i]);
         var testWord = prefixes[j].concat(initWords[i]);
-        if (possWord.match(testWord) != null) {
+        if (possWord.match(testReg) != null) {
+          console.log("found a prefix booboo")
           gTg = false;
           fadeTime = transTime;
           oldRoot = true;
@@ -1921,11 +2102,32 @@ function sendMakeWord() {
         }
       }
       for (var j = 0; j < suffixes.length; j ++) {
+        var testReg = new RegExp(initWords[i] + suffixes[j] + '$');
         var testWord = initWords[i].concat(suffixes[j]);
-        if (possWord.match(testWord) != null) {
+        if (possWord.match(testReg) != null) {
           gTg = false;
           fadeTime = transTime;
           oldRoot = true;
+          break;
+        }
+      }
+      var init2 = /(\w+(\w))/
+      var init3 = '$1$2'
+      var init4 = initWords[i].replace(init2, init3);
+      for (var j = 0; j < suff2.length; j ++) {
+        var testReg = new RegExp(init4 + suff2[j] + '$');
+        if (possWord.match(testReg) != null) {
+          gTg = false;
+          fadeTime = transTime;
+          oldRoot = true;
+          break;
+        }
+      }
+      var exc = new RegExp('^' + possWord + '$');
+      for (var j = 0; j < exceptions.length; j ++) {
+        if (exceptions[j].match(exc) != null) {
+          gTg = true;
+          oldRoot = false;
           break;
         }
       }
@@ -1987,7 +2189,7 @@ function buttonStuff() {
 
   if (turnState == 1 && actState) {
     if (b3 && !transState) {
-      transState = true;
+      //transState = true;
       socket.emit('drawTile', "x");
     }
   }
@@ -2008,7 +2210,11 @@ function buttonStuff() {
   }
 
   if (turnState == 5) {
-    if (b3) {socket.emit('imDone', "x");}
+    if (b3 && !passState) {
+
+      socket.emit('imDone', "x");
+      passState = true;
+    }
   }
 
   if (turnState == 2 && actState) {
@@ -2026,7 +2232,7 @@ function buttonStuff() {
   if (gameState == 15) {
     for (var i = 0; i < waiters.length; i++) {
       var tX1 = waiters[i].x - 30;
-      var tX2 = waiters[i].x + 30 + (waiters[i].letters.length * 30);
+      var tX2 = waiters[i].x + 30 + (waiters[i].letters.length * 60);
       var tY1 = waiters[i].y - 40;
       var tY2 = waiters[i].y + 40;
 
@@ -2073,6 +2279,14 @@ function buttonStuff() {
 
   }
 
+}
+
+function pickStuff() {
+  for (var i = 0; i < specTiles.length; i ++) {
+    if (mouseX2 > specTiles[i].x - 15 && mouseX2 < specTiles[i].x + 15 && mouseY2 > specTiles[i].y - 20 && mouseY2 < specTiles[i].y + 20) {
+      socket.emit('thisTile', i);
+    }
+  }
 }
 
 function howToPlay() {
@@ -2160,8 +2374,16 @@ function mousePressed() {
      takeWord();
      }
 
+     if (turnState == 6 && actState) {
+       pickStuff();
+     }
+
      if (gameState == 4 && pageState < 6) {
        turnPage();
+     }
+
+     if (gameState == 20 || gameState == 15 || gameState == 21) {
+       gameState = 12;
      }
 
      if (pageState >= 6) {
@@ -2224,6 +2446,7 @@ function keyTyped() {
   if(gameState == 11 || gameState == 20) {
     if (keyCode == ENTER) {
       sendName();
+      usernameLetters = [];
     } else {
       usernameLetters.push(key);
       writeName();
