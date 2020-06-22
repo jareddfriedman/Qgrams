@@ -189,6 +189,7 @@ function setup() {
         gameState = data.gS;
         turnState = data.tS;
         pn = data.pId;
+        tilesLeft = data.tL;
         if (pn == 1) {
           opn = 2;
         } else if (pn == 2) {
@@ -453,7 +454,7 @@ function setup() {
 
     socket.on('nobodyName',
     function() {
-      username = "";
+      //username = "";
       gameState = 20;
     });
 
@@ -682,7 +683,7 @@ function servErrScreen() {
   strokeWeight(2);
   stroke(50, 80, 0);
 
-  textSize(60);
+  textSize(48);
 
 
 
@@ -718,7 +719,7 @@ function pickScreen() {
       rectMode(CENTER);
       var tX = specTiles[i].x;
       var tY = specTiles[i].y;
-      rect(tX, tY, 30, 40, 5);
+      rect(tX, tY, 39, 52, 5);
       // noStroke();
       // fill(50, 80, 0);
       // textAlign(CENTER, CENTER);
@@ -732,26 +733,31 @@ function pickScreen() {
 
   for (var i = 0; i < specTiles.length; i++) {
   if (specTiles[i].id == thisPick) {
+    var newY;
+    if(specTiles[i].y > 630) {
+      newY = 630;
+    } else {
+      newY = specTiles[i].y;
+    }
   if(fadeTime3 - fadeTime < 120) {
-
   textSize(144);
   strokeWeight(5);
   stroke(50, 80, 0);
   fill(230, 255, 215);
   rectMode(CENTER);
-  rect(specTiles[i].x, specTiles[i].y, 180, 240, 20);
+  rect(specTiles[i].x, newY, 180, 240, 20);
   if (fadeTime3 - fadeTime < 60) {
     var fader = fadeTime3 - fadeTime;
     var fillMap = map(fader, 0, 60, 255, 0)
     fill(0, 0, 0, fillMap);
     rectMode(CENTER);
-    rect(specTiles[i].x, specTiles[i].y, 180, 240, 20);
+    rect(specTiles[i].x, newY, 180, 240, 20);
     } else {
     push();
     textAlign(CENTER, CENTER);
     fill(50, 80, 0);
     noStroke();
-    text(specTiles[i].letter.toUpperCase(), specTiles[i].x, specTiles[i].y);
+    text(specTiles[i].letter.toUpperCase(), specTiles[i].x, newY);
     textSize(24);
     //text(specTiles[i].points, 713, 460);
     pop();
@@ -2283,7 +2289,7 @@ function buttonStuff() {
 
 function pickStuff() {
   for (var i = 0; i < specTiles.length; i ++) {
-    if (mouseX2 > specTiles[i].x - 15 && mouseX2 < specTiles[i].x + 15 && mouseY2 > specTiles[i].y - 20 && mouseY2 < specTiles[i].y + 20) {
+    if (mouseX2 > specTiles[i].x - 20 && mouseX2 < specTiles[i].x + 20 && mouseY2 > specTiles[i].y - 26 && mouseY2 < specTiles[i].y + 26) {
       socket.emit('thisTile', i);
     }
   }
@@ -2301,7 +2307,7 @@ function howToPlay() {
     text("Let’s play Quarantinagrams!", 683, 65);
     textSize(46);
     textAlign(LEFT);
-    text("The object of Quarantinagrams is to win\nas many points as you can. Each letter is\nworth a certain number of points; the rarer\nthe letter, the more points it carries.\n\nPlayers take turns drawing tiles into the\ncommunity pot by clicking the \“Draw a Tile\”\nbutton or pressing enter.\n\nClick anywhere to continue...", 160, 180);
+    text("The object of Quarantinagrams is to win\nas many points as you can. Each letter is\nworth a certain number of points; the rarer\nthe letter, the more points it carries.\n\nPlayers take turns drawing tiles into the\ncommunity pot by clicking the \“PICK A NEW\nTILE\” button and then clicking on a blank tile.\n\nClick anywhere to continue...", 160, 180);
     console.log("Kilroy was here");
   }
 
