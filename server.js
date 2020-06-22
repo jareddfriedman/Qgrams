@@ -551,6 +551,9 @@ function(data) {
         }
       }
       if (iffer) {
+
+        tR.tilesLeft--;
+
         setTimeout(pickOver, 3000, tR);
 
         tR.comTiles.unshift(new LetterTile(tR.specTiles[data].letter, tR.specTiles[data].points, 0, 0, tR.specTiles[data].id));
@@ -844,7 +847,8 @@ function(data) {
               tS: brokenGames[i].tS,
               aS: brokenGames[i].aS,
               pId: pId,
-              opN: opN
+              opN: opN,
+              tL: brokenGames[i].tilesLeft
             }
 
           socket.emit('returnToGame', wbPkg);
@@ -1427,8 +1431,8 @@ function getStarted(roomObj) {
   allTiles = shuffle(allTiles);
 
 for (var i = 0; i < allTiles.length; i++) {
-  var tX = (i % 18) * 65 + 100;
-  var tY = (Math.floor(i / 18)) * 55 + 175;
+  var tX = (i % 20) * 55 + 163;
+  var tY = (Math.floor(i / 20)) * 65 + 175;
   roomObj.specTiles.push(new LetterTile(allTiles[i][0], allTiles[i][1], tX, tY, i+1));
   }
 }
@@ -1470,6 +1474,7 @@ function GameRoom(roomName, p1, p1friendly) {
   this.longest = 'x';
   this.bestWord = 'x';
   this.bestPoints = 0;
+  this.tilesLeft = 180;
 }
 
   GameRoom.prototype.buildTiles = function() {
