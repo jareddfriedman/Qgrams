@@ -1113,7 +1113,7 @@ function vestibule() {
 function showButtons() {
   var showButt = true;
 
-  if (gameState <= 1 || gameState == 3 || gameState >= 4 || turnState == 3 || turnState == 4) {
+  if (gameState <= 1 || gameState == 3 || gameState >= 4 || turnState == 3 || turnState == 4 || turnState == 6) {
     showButt = false;
   }
 
@@ -2141,6 +2141,7 @@ function sendMakeWord() {
   }
 
   if (gTg) {
+    initWords = [];
     socket.emit('sendWord', "x");
   }
 }
