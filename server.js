@@ -1759,7 +1759,7 @@ function GameRoom(roomName, p1, p1friendly) {
       var lC2 = 0;
       for (var i = 0; i < this.p1words.length; i++){
         var wordBreadth = this.p1words[i].breadth * 30;
-        if (lCounter + wordBreadth >= 563) {
+        if (lCounter + wordBreadth >= 560) {
           lCounter = 0;
           lC2 += 50;
         }
@@ -1781,7 +1781,7 @@ function GameRoom(roomName, p1, p1friendly) {
       var lC2 = 0;
       for (var i = 0; i < this.p2words.length; i++){
         var wordBreadth = this.p2words[i].breadth * 30;
-        if (lCounter + wordBreadth >= 563) {
+        if (lCounter + wordBreadth >= 560) {
           lCounter = 0;
           lC2 += 50;
         }
