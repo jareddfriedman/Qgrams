@@ -13,21 +13,16 @@ var valCat = {"a": 1, "b": 3, "c": 3, "d": 2, "e": 1, "f": 4, "g": 2,
               "v": 4, "w": 4, "x": 8, "y": 4, "z": 10};
 
 var allTiles = [["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1],
-["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["a", 1], ["b", 3], ["b", 3], ["b", 3], ["b", 3],
-["c", 3], ["c", 3], ["c", 3], ["c", 3], ["d", 2], ["d", 2], ["d", 2], ["d", 2], ["d", 2], ["d", 2], ["d", 2], ["d", 2], ["e", 1],
+["b", 3], ["b", 3], ["c", 3], ["c", 3], ["d", 2], ["d", 2], ["d", 2], ["d", 2],
 ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1],
-["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1], ["e", 1],
-["e", 1], ["f", 4], ["f", 4], ["f", 4], ["f", 4], ["g", 2], ["g", 2], ["g", 2], ["g", 2], ["g", 2], ["g", 2],
-["h", 4], ["h", 4], ["h", 4], ["h", 4], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1],
-["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["j", 8], ["j", 8],
-["k", 5], ["k", 5], ["l", 1], ["l", 1], ["l", 1], ["l", 1], ["l", 1], ["l", 1], ["l", 1], ["l", 1], ["m", 3],
-["m", 3], ["m", 3], ["m", 3], ["n", 1], ["n", 1], ["n", 1], ["n", 1], ["n", 1], ["n", 1], ["n", 1], ["n", 1],
-["n", 1], ["n", 1], ["n", 1], ["n", 1], ["p", 3], ["p", 3], ["p", 3], ["p", 3], ["q", 10], ["q", 10],
-["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1],
-["r", 1], ["s", 1], ["s", 1], ["s", 1], ["s", 1], ["s", 1], ["s", 1], ["s", 1], ["s", 1], ["t", 1],
-["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1],
-["u", 1], ["u", 1], ["u", 1], ["u", 1], ["u", 1], ["u", 1], ["u", 1], ["u", 1], ["v", 4], ["v", 4], ["v", 4], ["v", 4],
-["w", 4], ["w", 4], ["w", 4], ["w", 4], ["x", 8], ["x", 8], ["y", 4], ["y", 4], ["y", 4], ["y", 4], ["z", 10], ["z", 10]];
+["e", 1], ["f", 4], ["f", 4], ["g", 2], ["g", 2], ["g", 2],
+["h", 4], ["h", 4], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1], ["i", 1],
+["j", 8], ["k", 5], ["l", 1], ["l", 1], ["l", 1], ["l", 1], ["m", 3], ["m", 3], ["n", 1], ["n", 1], ["n", 1],
+["n", 1], ["n", 1], ["n", 1], ["o", 1], ["o", 1], ["o", 1], ["o", 1], ["o", 1], ["o", 1], ["o", 1], ["o", 1],
+["p", 3], ["p", 3], ["q", 10], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["r", 1], ["s", 1], ["s", 1],
+["s", 1], ["s", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1], ["t", 1],
+["u", 1], ["u", 1], ["u", 1], ["u", 1], ["v", 4], ["v", 4],
+["w", 4], ["w", 4], ["x", 8], ["y", 4], ["y", 4], ["z", 10]];
 
 var allXTiles = [["a", 1], ["d", 1], ["e", 1], ["r", 1], ["s", 1], ["t", 1], ["b", 1], ["o", 1], ["i", 1]];
 
@@ -1431,8 +1426,8 @@ function getStarted(roomObj) {
   allTiles = shuffle(allTiles);
 
 for (var i = 0; i < allTiles.length; i++) {
-  var tX = (i % 20) * 55 + 163;
-  var tY = (Math.floor(i / 20)) * 65 + 175;
+  var tX = (i % 14) * 70 + 228;
+  var tY = (Math.floor(i / 14)) * 85 + 175;
   roomObj.specTiles.push(new LetterTile(allTiles[i][0], allTiles[i][1], tX, tY, i+1));
   }
 }
@@ -1474,7 +1469,7 @@ function GameRoom(roomName, p1, p1friendly) {
   this.longest = 'x';
   this.bestWord = 'x';
   this.bestPoints = 0;
-  this.tilesLeft = 180;
+  this.tilesLeft = 90;
 }
 
   GameRoom.prototype.buildTiles = function() {
@@ -1758,10 +1753,10 @@ function GameRoom(roomName, p1, p1friendly) {
       var lCounter = 0;
       var lC2 = 0;
       for (var i = 0; i < this.p1words.length; i++){
-        var wordBreadth = this.p1words[i].breadth * 30;
+        var wordBreadth = this.p1words[i].breadth * 45;
         if (lCounter + wordBreadth >= 560) {
           lCounter = 0;
-          lC2 += 50;
+          lC2 += 75;
         }
         this.p1words[i].x = 20 + lCounter;
         this.p1words[i].y = lC2 + 164;
@@ -1780,10 +1775,10 @@ function GameRoom(roomName, p1, p1friendly) {
       var lCounter = 0;
       var lC2 = 0;
       for (var i = 0; i < this.p2words.length; i++){
-        var wordBreadth = this.p2words[i].breadth * 30;
+        var wordBreadth = this.p2words[i].breadth * 45;
         if (lCounter + wordBreadth >= 560) {
           lCounter = 0;
-          lC2 += 50;
+          lC2 += 75;
         }
         this.p2words[i].x = 1346 - lCounter - wordBreadth;
         this.p2words[i].y = lC2 + 164;
