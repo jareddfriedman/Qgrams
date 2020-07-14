@@ -16,7 +16,7 @@ var initState = true; // moves text based on whether game is in progress
 
 var animTime = 0;
 
-var tilesLeft = 180;
+var tilesLeft = 98;
 
 var blockTiles = [];
 
@@ -74,6 +74,11 @@ var oldRoot = false;
 var initWords = [];
 
 var thisPick = 0;
+
+var valCat = {"a": 1, "b": 3, "c": 3, "d": 2, "e": 1, "f": 4, "g": 2,
+              "h": 4, "i": 1, "j": 8, "k": 5, "l": 1, "m": 3, "n": 1,
+              "o": 1, "p": 3, "q": 10, "r": 1, "s": 1, "t": 1, "u": 1,
+              "v": 4, "w": 4, "x": 8, "y": 4, "z": 10};
 
 var prefixes = ["un", "in", "pre", "non", "re", "de", "dis"];
 
@@ -719,7 +724,7 @@ function pickScreen() {
       rectMode(CENTER);
       var tX = specTiles[i].x;
       var tY = specTiles[i].y;
-      rect(tX, tY, 39, 52, 5);
+      rect(tX, tY, 52, 70, 10);
       // noStroke();
       // fill(50, 80, 0);
       // textAlign(CENTER, CENTER);
@@ -745,13 +750,13 @@ function pickScreen() {
   stroke(50, 80, 0);
   fill(230, 255, 215);
   rectMode(CENTER);
-  rect(specTiles[i].x, newY, 180, 240, 20);
+  rect(specTiles[i].x, newY, 150, 200, 20);
   if (fadeTime3 - fadeTime < 60) {
     var fader = fadeTime3 - fadeTime;
     var fillMap = map(fader, 0, 60, 255, 0)
     fill(0, 0, 0, fillMap);
     rectMode(CENTER);
-    rect(specTiles[i].x, newY, 180, 240, 20);
+    rect(specTiles[i].x, newY, 150, 200, 20);
     } else {
     push();
     textAlign(CENTER, CENTER);
@@ -946,7 +951,7 @@ function showWaiters(data) {
 
   if(waiters.length > 0) {
 
-  text("Here are the people currently waiting!\nIf you see your friend, click on their name,\nor click anywhere else to return to\nthe lobby.", 683, 30);
+  text("Here are the people currently waiting! If you see your friend,\nclick on their name, or click anywhere else to return to the lobby.", 683, 30);
 
   for(var i = 0; i < waiters.length; i ++) {
     var tLets = waiters[i].letters;
@@ -1228,7 +1233,7 @@ function showButtons() {
 function endSeq() {
   if (p1words.length > 0) {
     push();
-    textSize(30);
+    textSize(36);
     for (var i = 0; i < p1words.length; i++) {
       if(p1words[i].disp){
       var wordLetters = p1words[i].word.split('');
@@ -1240,24 +1245,28 @@ function endSeq() {
         stroke(180);
         strokeWeight(1);
         rectMode(CORNER);
-        rect((tX + (j * 30)), tY, 30, 40, 5);
+        rect((tX + (j * 45)), tY, 45, 60, 8);
         push();
           fill(180);
           noStroke();
-          translate(15, 20);
+          translate(22, 30);
           textAlign(CENTER, CENTER);
           textFont(tileFont);
-          text(wordLetters[j].toUpperCase(), (tX + (j * 30)), tY);
+          text(wordLetters[j].toUpperCase(), (tX + (j * 45)), tY);
+          translate(15, 20);
+          textAlign(CENTER, CENTER);
+          textSize(12);
+          text(valCat[wordLetters[j]], (tX + (j * 45)), tY);
         pop();
       }
     }
-    var tSX = tX + (p1words[i].breadth * 15);
+    var tSX = tX + (p1words[i].breadth * 22);
     push();
     textSize(64);
     fill(180, 0, 0);
     noStroke();
     textAlign(CENTER, CENTER);
-    text(p1words[i].points, tSX, tY + 15);
+    text(p1words[i].points, tSX, tY + 30);
     pop();
     }
 
@@ -1266,7 +1275,7 @@ function endSeq() {
 
   if (p2words.length > 0) {
     push();
-    textSize(30);
+    textSize(36);
     for (var i = 0; i < p2words.length; i++) {
       if(p2words[i].disp){
       var wordLetters = p2words[i].word.split('');
@@ -1278,24 +1287,28 @@ function endSeq() {
         stroke(180);
         strokeWeight(1);
         rectMode(CORNER);
-        rect((tX + (j * 30)), tY, 30, 40, 5);
+        rect((tX + (j * 45)), tY, 45, 60, 8);
         push();
           fill(180);
           noStroke();
-          translate(15, 20);
+          translate(22, 30);
           textAlign(CENTER, CENTER);
           textFont(tileFont);
-          text(wordLetters[j].toUpperCase(), (tX + (j * 30)), tY);
+          text(wordLetters[j].toUpperCase(), (tX + (j * 45)), tY);
+          translate(15, 20);
+          textAlign(CENTER, CENTER);
+          textSize(12);
+          text(valCat[wordLetters[j]], (tX + (j * 45)), tY);
         pop();
       }
     }
-    var tSX = tX + (p2words[i].breadth * 15);
+    var tSX = tX + (p2words[i].breadth * 22);
     push();
     textSize(64);
     fill(180, 0, 0);
     noStroke();
     textAlign(CENTER, CENTER);
-    text(p2words[i].points, tSX, tY + 15);
+    text(p2words[i].points, tSX, tY + 30);
     pop();
     }
 
@@ -1317,8 +1330,11 @@ function endSeq() {
   text(opName.toUpperCase() + ": " + p1tot + " " + username.toUpperCase() + ": " + p2tot, 0, 0);
   }
   translate(0, 300);
+  strokeWeight(4);
   textSize(84);
-  if ((p1tot > p2tot && pn == 1) || (p2tot>p1tot && pn == 2)) {
+  if (p1tot == p2tot) {
+    text("TIE GAME!", 0, 0);
+  } else if ((p1tot > p2tot && pn == 1) || (p2tot>p1tot && pn == 2)) {
     text("YOU WIN!!", 0, 0);
   } else {
     text(opName.toUpperCase() + " WINS!", 0, 0);
@@ -1326,8 +1342,10 @@ function endSeq() {
   textSize(64);
   text("LONGEST WORD: " + longWord.toUpperCase(), 0, 100);
   textSize(48);
-  text("BEST WORD: " + bestWord.toUpperCase() + " FOR " + bestPoints + " POINTS!", 0, 160);
-  text("BEST STEAL: " + bSWord.toUpperCase() + " FOR " + bSPoints + " POINTS!", 0, 220);
+  text("BEST WORD: " + bestWord.toUpperCase() + " FOR " + bestPoints + " POINTS!", 0, 180);
+  if(bSWord != "x") {
+  text("BEST STEAL: " + bSWord.toUpperCase() + " FOR " + bSPoints + " POINTS!", 0, 250);
+    }
   pop();
 
 }
@@ -1505,7 +1523,7 @@ function grabTile() {
   if (p1words.length >= 1) {
     for (var i = 0; i < p1words.length; i++) {
       var cT = p1words[i];
-      if (mouseX2 > cT.x && mouseX2 < (cT.x + (cT.breadth*30)) && mouseY2 > cT.y && mouseY2 < cT.y + 40 && cT.disp) {
+      if (mouseX2 > cT.x && mouseX2 < (cT.x + (cT.breadth*45)) && mouseY2 > cT.y && mouseY2 < cT.y + 60 && cT.disp) {
         grabbed = true;
         var data = {type:2, element:i, snapx:cT.x, snapy:cT.y}
         socket.emit('grabbedWord', data);
@@ -1518,7 +1536,7 @@ function grabTile() {
       var cT = p2words[i];
       var nX = p2words[i].x;
 
-      if (mouseX2 > nX && mouseX2 < cT.x + (p2words[i].breadth * 30) && mouseY2 > cT.y && mouseY2 < cT.y + 40 && cT.disp) {
+      if (mouseX2 > nX && mouseX2 < cT.x + (p2words[i].breadth * 45) && mouseY2 > cT.y && mouseY2 < cT.y + 60 && cT.disp) {
         grabbed = true;
         var data = {type:3, element:i, snapx:nX, snapy:cT.y}
         socket.emit('grabbedWord', data);
@@ -1543,7 +1561,7 @@ function grabCWord (){
   if (p1words.length >= 1 && pn == 2) {
     for (var i = 0; i < p1words.length; i++) {
       var cT = p1words[i];
-      if (mouseX2 > cT.x && mouseX2 < (cT.x + (cT.breadth*30)) && mouseY2 > cT.y && mouseY2 < cT.y + 40) {
+      if (mouseX2 > cT.x && mouseX2 < (cT.x + (cT.breadth*45)) && mouseY2 > cT.y && mouseY2 < cT.y + 60) {
         if (cT.vul){
         var data =  {word: cT.word, elt: i, pn: pn};
         invul = false;
@@ -1560,7 +1578,7 @@ function grabCWord (){
       var cT = p2words[i];
       var nX = p2words[i].x;
 
-      if (mouseX2 > nX && mouseX2 < cT.x + (p2words[i].breadth * 30) && mouseY2 > cT.y && mouseY2 < cT.y + 40) {
+      if (mouseX2 > nX && mouseX2 < cT.x + (p2words[i].breadth * 45) && mouseY2 > cT.y && mouseY2 < cT.y + 60) {
         if (cT.vul){
         var data =  {word: cT.word, elt: i, pn: pn};
         invul = false;
@@ -1745,7 +1763,7 @@ function showBlockTiles() {
 function showWordTiles() {
  if (p1words.length > 0) {
    push();
-   textSize(28);
+   textSize(36);
    for (var i = 0; i < p1words.length; i++) {
      if(p1words[i].disp){
      var wordLetters = p1words[i].word.split('');
@@ -1757,7 +1775,7 @@ function showWordTiles() {
        stroke(50, 80, 0);
        strokeWeight(1);
        rectMode(CORNER);
-       rect((tX + (j * 30)), tY, 30, 40, 5);
+       rect((tX + (j *45)), tY, 45, 60, 8);
        push();
        if (p1words[i].vul) {
          fill(50, 80, 0);
@@ -1765,10 +1783,14 @@ function showWordTiles() {
          fill(180, 0, 0);
        }
          noStroke();
-         translate(15, 20);
+         translate(22, 30);
          textAlign(CENTER, CENTER);
          textFont(tileFont);
-         text(wordLetters[j].toUpperCase(), (tX + (j * 30)), tY);
+         text(wordLetters[j].toUpperCase(), (tX + (j * 45)), tY);
+         translate(15, 20);
+         textAlign(CENTER, CENTER);
+         textSize(12);
+         text(valCat[wordLetters[j]], (tX + (j * 45)), tY);
        pop();
      }
    }
@@ -1779,7 +1801,7 @@ function showWordTiles() {
 
  if (p2words.length > 0) {
    push();
-   textSize(28);
+   textSize(36);
    for (var i = 0; i < p2words.length; i++) {
      if(p2words[i].disp){
      var wordLetters = p2words[i].word.split('');
@@ -1791,7 +1813,7 @@ function showWordTiles() {
        stroke(50, 80, 0);
        strokeWeight(1);
        rectMode(CORNER);
-       rect((tX + (j * 30)), tY, 30, 40, 5);
+       rect((tX + (j * 45)), tY, 45, 60, 8);
        push();
        if (p2words[i].vul) {
          fill(50, 80, 0);
@@ -1799,10 +1821,14 @@ function showWordTiles() {
          fill(180, 0, 0);
        }
          noStroke();
-         translate(15, 20);
+         translate(22, 30);
          textAlign(CENTER, CENTER);
          textFont(tileFont);
-         text(wordLetters[j].toUpperCase(), (tX + (j * 30)), tY);
+         text(wordLetters[j].toUpperCase(), (tX + (j * 45)), tY);
+         translate(15, 20);
+         textAlign(CENTER, CENTER);
+         textSize(12);
+         text(valCat[wordLetters[j]], (tX + (j * 45)), tY);
        pop();
      }
    }
