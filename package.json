@@ -14,7 +14,7 @@
   "author": "Jared Friedman",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.17.1",
+    "express": "^4.17.3",
     "node-datetime": "^2.1.2",
     "socket.io": "^2.3.0"
   }
